@@ -1,0 +1,21 @@
+[Unit]
+Description=Ba Man Bebin — watch party server
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/ba-man-bebin
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=-/var/www/ba-man-bebin/.env
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

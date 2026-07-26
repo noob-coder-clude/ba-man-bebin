@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title data-i18n="meta.title">با من ببین — تماشای همزمان با دوستان</title>
+<meta name="description" content="با من ببین: فیلم و ویدیو را کاملاً همگام با دوستانت تماشا کن، با چت زنده و واکنش‌های لحظه‌ای." />
+<meta name="theme-color" content="#05060c" />
+<meta property="og:title" content="Ba Man Bebin — Watch together" />
+<meta property="og:description" content="Watch videos in perfect sync with friends, with live chat and reactions." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" />
+<link rel="stylesheet" href="/assets/css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="#fff"/><circle cx="4.2" cy="12" r="2.2" fill="#fff" opacity=".85"/></svg>
+      </span>
+      <span>Ba Man Bebin</span>
+    </a>
+
+    <button class="nav__toggle" id="navToggle" data-i18n-aria="nav.menu" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+
+    <nav class="nav__links" id="navLinks">
+      <a href="#features" data-i18n="nav.features">امکانات</a>
+      <a href="#how" data-i18n="nav.how">چطور کار می‌کند</a>
+      <a href="#faq" data-i18n="nav.faq">سؤالات متداول</a>
+    </nav>
+
+    <div class="nav__actions">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="fa">FA</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <button class="btn btn--primary btn--sm" data-create-room data-i18n="nav.create">ساخت اتاق</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- HERO -->
+  <section class="hero">
+    <div class="container hero__grid">
+      <div>
+        <span class="pill"><i class="dot"></i><span data-i18n="hero.badge">همگام‌سازی زیر ۱۰۰ میلی‌ثانیه</span></span>
+        <h1>
+          <span data-i18n="hero.title.1">فیلم را </span><span class="gradient-text" data-i18n="hero.title.hl">با هم</span><span data-i18n="hero.title.2"> ببینید، حتی از دو سر دنیا</span>
+        </h1>
+        <p class="lead" data-i18n="hero.lead">یک اتاق بساز، لینکش را بفرست و ویدیو را دقیقاً همزمان تماشا کنید.</p>
+
+        <div class="hero__cta">
+          <button class="btn btn--primary" data-create-room>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            <span data-i18n="hero.cta.primary">ساخت اتاق رایگان</span>
+          </button>
+          <a class="btn btn--ghost" href="#features" data-i18n="hero.cta.secondary">دیدن امکانات</a>
+          <span class="pill" data-i18n="hero.note">بدون ثبت‌نام · بدون نصب</span>
+        </div>
+
+        <div class="hero__stats">
+          <div class="stat"><b>&lt;100</b><span data-i18n="hero.stat1">میلی‌ثانیه اختلاف</span></div>
+          <div class="stat"><b>50</b><span data-i18n="hero.stat2">نفر در هر اتاق</span></div>
+          <div class="stat"><b>24/7</b><span data-i18n="hero.stat3">در دسترس</span></div>
+        </div>
+      </div>
+
+      <!-- Mockup -->
+      <div class="mockup" aria-hidden="true">
+        <div class="mockup__bar"><i></i><i></i><i></i></div>
+        <div class="mockup__screen">
+          <div class="mockup__video">
+            <div class="mockup__play"></div>
+            <div class="mockup__progress"><span></span></div>
+          </div>
+          <div class="mockup__chat">
+            <div class="chat-bubble"><b data-i18n="mock.user1">سارا</b><span data-i18n="mock.chat.1">این صحنه رو ببین!</span></div>
+            <div class="chat-bubble chat-bubble--me"><b data-i18n="mock.user2">تو</b><span data-i18n="mock.chat.2">صبر کن، پاپ‌کورن بیارم 🍿</span></div>
+            <div class="chat-bubble"><b data-i18n="mock.user3">سیستم</b><span data-i18n="mock.chat.3">همگام شد ✅</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section__head reveal">
+        <span class="eyebrow" data-i18n="features.eyebrow">امکانات</span>
+        <h2 data-i18n="features.title">هر چیزی که برای یک شب فیلم مشترک لازم دارید</h2>
+        <p data-i18n="features.sub">ساده، سریع و بدون دردسر.</p>
+      </div>
+
+      <div class="grid grid--3">
+        <article class="card reveal">
+          <div class="card__icon">🎯</div>
+          <h3 data-i18n="f1.title">همگام‌سازی دقیق</h3>
+          <p data-i18n="f1.text">پخش، توقف و جابه‌جایی برای همه در یک لحظه اعمال می‌شود.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card__icon">💬</div>
+          <h3 data-i18n="f2.title">چت زنده</h3>
+          <p data-i18n="f2.text">کنار پلیر گپ بزنید.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card__icon">✨</div>
+          <h3 data-i18n="f3.title">واکنش‌های لحظه‌ای</h3>
+          <p data-i18n="f3.text">با یک کلیک ایموجی بفرستید.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card__icon">📺</div>
+          <h3 data-i18n="f4.title">یوتیوب و فایل محلی</h3>
+          <p data-i18n="f4.text">لینک یوتیوب یا فایل خودتان.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card__icon">🎬</div>
+          <h3 data-i18n="f5.title">کنترل میزبان</h3>
+          <p data-i18n="f5.text">میزبان کنترل پخش را دارد.</p>
+        </article>
+        <article class="card reveal">
+          <div class="card__icon">🔒</div>
+          <h3 data-i18n="f6.title">حریم خصوصی</h3>
+          <p data-i18n="f6.text">بدون حساب کاربری.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW -->
+  <section class="section" id="how">
+    <div class="container">
+      <div class="section__head reveal">
+        <span class="eyebrow" data-i18n="how.eyebrow">شروع کنید</span>
+        <h2 data-i18n="how.title">در سه قدم ساده</h2>
+        <p data-i18n="how.sub">کمتر از یک دقیقه تا شروع تماشا.</p>
+      </div>
+
+      <div class="grid grid--3 steps">
+        <div class="card step reveal">
+          <div class="step__num">1</div>
+          <h3 data-i18n="s1.title">اتاق بساز</h3>
+          <p data-i18n="s1.text">یک اتاق اختصاصی با شناسه یکتا.</p>
+        </div>
+        <div class="card step reveal">
+          <div class="step__num">2</div>
+          <h3 data-i18n="s2.title">لینک را بفرست</h3>
+          <p data-i18n="s2.text">دوستانت با یک کلیک وارد می‌شوند.</p>
+        </div>
+        <div class="card step reveal">
+          <div class="step__num">3</div>
+          <h3 data-i18n="s3.title">با هم ببینید</h3>
+          <p data-i18n="s3.text">بقیه خودکار همگام می‌شوند.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="section">
+    <div class="container">
+      <div class="cta-panel reveal">
+        <h2 data-i18n="cta.title">آماده‌ای شروع کنی؟</h2>
+        <p data-i18n="cta.sub">یک اتاق بساز یا با شناسه اتاق وارد شو.</p>
+        <form class="joinbox" id="joinForm">
+          <input class="input" id="roomInput" data-i18n-placeholder="cta.placeholder" placeholder="شناسه اتاق" autocomplete="off" />
+          <button class="btn" type="submit" data-i18n="cta.join">ورود</button>
+          <button class="btn btn--primary" type="button" data-create-room data-i18n="cta.create">ساخت اتاق</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section" id="faq">
+    <div class="container">
+      <div class="section__head reveal">
+        <span class="eyebrow" data-i18n="faq.eyebrow">پرسش‌ها</span>
+        <h2 data-i18n="faq.title">سؤالات متداول</h2>
+      </div>
+
+      <div class="faq">
+        <details class="faq__item reveal" open>
+          <summary data-i18n="faq.q1">آیا باید ثبت‌نام کنم؟</summary>
+          <p data-i18n="faq.a1">نه.</p>
+        </details>
+        <details class="faq__item reveal">
+          <summary data-i18n="faq.q2">آیا فایل ویدیویی من آپلود می‌شود؟</summary>
+          <p data-i18n="faq.a2">خیر.</p>
+        </details>
+        <details class="faq__item reveal">
+          <summary data-i18n="faq.q3">چند نفر می‌توانند در یک اتاق باشند؟</summary>
+          <p data-i18n="faq.a3">تا ۵۰ نفر.</p>
+        </details>
+        <details class="faq__item reveal">
+          <summary data-i18n="faq.q4">روی موبایل کار می‌کند؟</summary>
+          <p data-i18n="faq.a4">بله.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container site-footer__inner">
+    <div>© <span id="year"></span> Ba Man Bebin — <span data-i18n="footer.rights">ساخته‌شده برای شب‌های فیلم مشترک.</span></div>
+    <div style="display:flex;gap:16px">
+      <a href="/healthz" data-i18n="footer.status">وضعیت سرویس</a>
+    </div>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script type="module" src="/assets/js/home.js"></script>
+</body>
+</html>
