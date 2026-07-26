@@ -642,6 +642,125 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
 
 .badge--host { color: #ffd479; border-color: rgba(251, 191, 36, 0.4); background: rgba(251, 191, 36, 0.1); }
 .badge--live { color: var(--ok); border-color: rgba(52, 211, 153, 0.35); background: rgba(52, 211, 153, 0.1); }
+.badge--kind { color: var(--brand-2); border-color: rgba(33, 212, 253, 0.35); background: rgba(33, 212, 253, 0.1); }
+
+/* Proxy toggle */
+
+.proxy-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.proxy-toggle:hover { color: var(--text); border-color: var(--border-strong); }
+.proxy-toggle input { accent-color: var(--brand); width: 15px; height: 15px; cursor: pointer; }
+.proxy-toggle.is-on { color: var(--brand-2); border-color: rgba(33, 212, 253, 0.4); }
+
+/* Playability probe report */
+
+.probe {
+  margin: 0 14px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+  animation: fadeUp 0.3s both;
+}
+
+.probe--ok { border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.07); }
+.probe--warn { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.07); }
+.probe--fail { border-color: rgba(255, 77, 141, 0.45); background: rgba(255, 77, 141, 0.07); }
+
+.probe__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  font-size: 0.92rem;
+}
+
+.probe__icon { font-size: 1.05rem; }
+
+.probe__close {
+  margin-inline-start: auto;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.probe__close:hover { color: var(--text); }
+
+.probe__list {
+  margin: 0;
+  padding: 0 14px 12px;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+  font-size: 0.83rem;
+  color: var(--muted);
+}
+
+.probe__list li { display: flex; gap: 8px; align-items: flex-start; }
+.probe__list li::before { content: '•'; opacity: 0.5; }
+.probe__list li.is-good::before { content: '✓'; color: var(--ok); opacity: 1; }
+.probe__list li.is-bad::before { content: '✕'; color: var(--accent); opacity: 1; }
+.probe__list li.is-warn::before { content: '!'; color: var(--warn); opacity: 1; font-weight: 800; }
+
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Torrent progress HUD */
+
+.torrent-hud {
+  position: absolute;
+  inset-inline: 14px;
+  bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(6, 8, 15, 0.9);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(8px);
+  z-index: 5;
+}
+
+.torrent-hud__bar {
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+
+.torrent-hud__bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  transition: width 0.4s ease;
+}
+
+.torrent-hud__meta {
+  font-size: 0.76rem;
+  color: var(--muted);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
 
 .room-head {
   display: flex;

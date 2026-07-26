@@ -16,6 +16,18 @@ const el = {
   video: document.getElementById('localVideo'),
   sourceInput: document.getElementById('sourceInput'),
   loadBtn: document.getElementById('loadBtn'),
+  testBtn: document.getElementById('testBtn'),
+  kindBadge: document.getElementById('kindBadge'),
+  proxyToggle: document.getElementById('proxyToggle'),
+  proxyWrap: document.getElementById('proxyWrap'),
+  probe: document.getElementById('probe'),
+  probeIcon: document.getElementById('probeIcon'),
+  probeTitle: document.getElementById('probeTitle'),
+  probeList: document.getElementById('probeList'),
+  probeClose: document.getElementById('probeClose'),
+  torrentHud: document.getElementById('torrentHud'),
+  torrentProgress: document.getElementById('torrentProgress'),
+  torrentMeta: document.getElementById('torrentMeta'),
   fileBtn: document.getElementById('fileBtn'),
   fileInput: document.getElementById('fileInput'),
   syncBtn: document.getElementById('syncBtn'),
@@ -41,6 +53,9 @@ const state = {
   ytReady: false,
   ytPlayer: null,
   pendingSource: null,
+  lastProbe: null, // report for the link currently in the input
+  hls: null, // hls.js instance
+  torrent: null, // { client, torrent } for magnet playback
 };
 
 let socket = null;
@@ -151,28 +166,183 @@ const player = {
   },
 };
 
+/* ------------------------------------------------------------------ */
+/* Source loading: youtube · direct (mp4/HLS, optional proxy) · torrent */
+/* ------------------------------------------------------------------ */
+
+const proxied = (url) => `/api/media/proxy?url=${encodeURIComponent(url)}`;
+
+/** Tear down whatever engine is currently running before switching source. */
+function teardownPlayback() {
+  if (state.hls) {
+    state.hls.destroy();
+    state.hls = null;
+  }
+  if (state.torrent) {
+    try {
+      state.torrent.client.destroy();
+    } catch { /* already gone */ }
+    state.torrent = null;
+  }
+  el.torrentHud.hidden = true;
+  el.video.removeAttribute('src');
+  el.video.load?.();
+}
+
+function showVideoElement() {
+  el.empty.classList.add('hidden');
+  el.ytHost.classList.add('hidden');
+  el.video.classList.remove('hidden');
+}
+
+/** Play a direct URL (mp4/webm/m3u8), optionally routed through our server. */
+function playDirect(source, playback) {
+  const raw = source.value;
+  const url = source.proxy ? proxied(raw) : raw;
+  showVideoElement();
+
+  const isHls = source.hls || /\.m3u8(\?|#|$)/i.test(raw);
+
+  if (isHls) {
+    // Safari plays HLS natively; everyone else needs hls.js.
+    if (el.video.canPlayType('application/vnd.apple.mpegurl')) {
+      el.video.src = url;
+    } else if (window.Hls?.isSupported()) {
+      state.hls = new window.Hls({ enableWorker: true, lowLatencyMode: false });
+      state.hls.loadSource(url);
+      state.hls.attachMedia(el.video);
+      state.hls.on(window.Hls.Events.ERROR, (_e, data) => {
+        if (data?.fatal) toast(`⚠️ ${t('probe.failTitle')}`);
+      });
+    } else {
+      toast(`⚠️ ${t('probe.container')}`);
+      return;
+    }
+  } else {
+    el.video.src = url;
+  }
+
+  el.video.controls = state.isHost;
+  if (playback) setTimeout(() => applyPlaybackState(playback), 400);
+}
+
+/** Stream a magnet/torrent peer-to-peer, straight into the <video> element. */
+async function playTorrent(source, playback) {
+  showVideoElement();
+  el.torrentHud.hidden = false;
+  el.torrentProgress.style.width = '0%';
+  el.torrentMeta.textContent = t('torrent.connecting');
+
+  let WebTorrent;
+  try {
+    ({ default: WebTorrent } = await import('https://cdn.jsdelivr.net/npm/webtorrent@2.5.1/dist/webtorrent.min.js'));
+  } catch {
+    el.torrentMeta.textContent = t('torrent.failed');
+    toast(`⚠️ ${t('torrent.failed')}`);
+    return;
+  }
+
+  const client = new WebTorrent();
+  state.torrent = { client, torrent: null };
+  el.torrentMeta.textContent = t('torrent.searching');
+
+  client.on('error', () => {
+    el.torrentMeta.textContent = t('torrent.failed');
+  });
+
+  client.add(source.value, (torrent) => {
+    if (!state.torrent) return; // switched source while connecting
+    state.torrent.torrent = torrent;
+
+    const file = torrent.files
+      .filter((f) => /\.(mp4|webm|mkv|avi|mov|m4v)$/i.test(f.name))
+      .sort((a, b) => b.length - a.length)[0];
+
+    if (!file) {
+      el.torrentMeta.textContent = t('torrent.noVideo');
+      toast(`⚠️ ${t('torrent.noVideo')}`);
+      return;
+    }
+
+    file.streamTo(el.video);
+    el.video.controls = state.isHost;
+    if (playback) setTimeout(() => applyPlaybackState(playback), 1200);
+
+    const fmt = (bytes) => {
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let n = bytes;
+      let i = 0;
+      while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+      return `${n.toFixed(1)} ${units[i]}`;
+    };
+
+    const tick = () => {
+      if (!state.torrent?.torrent) return;
+      const pct = Math.min(100, torrent.progress * 100);
+      el.torrentProgress.style.width = `${pct}%`;
+      el.torrentMeta.textContent =
+        `${pct.toFixed(1)}% · ${t('torrent.peers')}: ${torrent.numPeers} · `
+        + `${t('torrent.speed')}: ${fmt(torrent.downloadSpeed)}/s · `
+        + `${t('torrent.downloaded')}: ${fmt(torrent.downloaded)}`;
+      if (torrent.progress >= 1) setTimeout(() => { el.torrentHud.hidden = true; }, 2500);
+    };
+
+    torrent.on('download', tick);
+    torrent.on('done', tick);
+    tick();
+  });
+}
+
 function applySource(source, playback) {
+  teardownPlayback();
   state.source = source;
   if (!source) return;
 
+  updateKindBadge(source.kind);
+
   if (source.kind === 'youtube') {
+    el.video.classList.add('hidden');
     if (!state.ytReady) {
       state.pendingSource = { source, playback };
       return;
     }
     createYtPlayer(source.value, playback);
-  } else {
-    // Local file: each viewer must open the same file themselves.
-    el.empty.classList.remove('hidden');
-    el.ytHost.classList.add('hidden');
-    if (!el.video.src) toast(t('room.fileNote'));
+    return;
   }
+
+  if (source.kind === 'direct') {
+    playDirect(source, playback);
+    return;
+  }
+
+  if (source.kind === 'torrent') {
+    playTorrent(source, playback);
+    return;
+  }
+
+  // Local file: each viewer must open the same file themselves.
+  el.empty.classList.remove('hidden');
+  el.ytHost.classList.add('hidden');
+  if (!el.video.src) toast(t('room.fileNote'));
+}
+
+function updateKindBadge(kind) {
+  if (!kind) {
+    el.kindBadge.hidden = true;
+    return;
+  }
+  const labels = { youtube: 'YouTube', direct: 'Direct', torrent: 'Torrent', file: 'File' };
+  el.kindBadge.textContent = labels[kind] || kind;
+  el.kindBadge.className = 'badge badge--kind';
+  el.kindBadge.hidden = false;
 }
 
 /** Align local playback with the authoritative server state. */
 function applyPlaybackState(playback) {
   if (!playback || !state.source) return;
   if (state.source.kind === 'file' && !el.video.src) return;
+  // Nothing to sync against until the media element has metadata.
+  if (['direct', 'torrent'].includes(state.source.kind) && el.video.readyState === 0) return;
 
   state.suppress = true;
   const target = playback.time + (playback.playing ? (Date.now() - playback.serverTime) / 1000 : 0);
@@ -188,7 +358,10 @@ function isPlaying() {
     // 1 === YT.PlayerState.PLAYING (avoid touching YT before the API loads)
     return state.ytPlayer?.getPlayerState?.() === 1;
   }
-  return Boolean(el.video.src) && !el.video.paused;
+  // hls.js and torrent streams attach via MediaSource, so check readiness
+  // rather than the src attribute alone.
+  const hasMedia = Boolean(el.video.src || el.video.srcObject || el.video.readyState > 0);
+  return hasMedia && !el.video.paused;
 }
 
 function emitControl(playing, time, reason) {
@@ -229,7 +402,10 @@ function setRole(isHost) {
   el.roleBadge.textContent = isHost ? t('room.host') : t('room.viewer');
   el.roleBadge.classList.toggle('badge--host', isHost);
   el.loadBtn.disabled = !isHost;
+  el.testBtn.disabled = !isHost;
   el.sourceInput.disabled = !isHost;
+  el.proxyToggle.disabled = !isHost;
+  el.proxyWrap.style.opacity = isHost ? '1' : '0.5';
   // Picking a local file is always allowed — it never leaves the browser,
   // and viewers need it to follow along when the host shares a file.
   el.fileBtn.disabled = false;
@@ -346,12 +522,204 @@ el.nameForm.addEventListener('submit', (event) => {
 const savedName = localStorage.getItem('bmb.name');
 if (savedName) el.nameInput.value = savedName;
 
-el.loadBtn.addEventListener('click', () => {
-  if (!state.isHost) return toast(t('room.onlyHost'));
-  const videoId = parseYouTubeId(el.sourceInput.value);
-  if (!videoId) return toast(t('room.invalidUrl'));
-  socket.emit('player:source', { kind: 'youtube', value: videoId, title: el.sourceInput.value });
-  return undefined;
+/* ------------------------------------------------------------------ */
+/* Playability test ("قبلش تست بگیره پخش میشه یا نه")                   */
+/* ------------------------------------------------------------------ */
+
+const fmtBytes = (bytes) => {
+  if (!bytes) return '—';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+  return `${n.toFixed(1)} ${units[i]}`;
+};
+
+const PROBE_ERRORS = {
+  timeout: 'probe.errTimeout',
+  unreachable: 'probe.errUnreachable',
+  dns_failed: 'probe.errDns',
+  blocked_address: 'probe.errBlocked',
+  unsupported_protocol: 'probe.errProtocol',
+  invalid_url: 'probe.errInvalid',
+  unsupported_link: 'probe.errUnsupported',
+  too_many_redirects: 'probe.errUnreachable',
+};
+
+function showProbe(variant, title, items, icon) {
+  el.probe.hidden = false;
+  el.probe.className = `probe probe--${variant}`;
+  el.probeIcon.textContent = icon;
+  el.probeIcon.className = 'probe__icon';
+  el.probeTitle.textContent = title;
+  el.probeList.innerHTML = '';
+  items.forEach(({ text, tone }) => {
+    const li = document.createElement('li');
+    if (tone) li.className = `is-${tone}`;
+    li.textContent = text;
+    el.probeList.appendChild(li);
+  });
+}
+
+function setProbeLoading() {
+  el.probe.hidden = false;
+  el.probe.className = 'probe';
+  el.probeIcon.textContent = '⏳';
+  el.probeIcon.className = 'probe__icon spin';
+  el.probeTitle.textContent = t('room.testing');
+  el.probeList.innerHTML = '';
+}
+
+/** Run the test and return the source descriptor to load (or null). */
+async function testLink({ silent = false } = {}) {
+  const url = el.sourceInput.value.trim();
+  if (!url) {
+    toast(t('room.enterLink'));
+    return null;
+  }
+
+  if (!silent) setProbeLoading();
+
+  let data;
+  try {
+    const res = await fetch('/api/media/probe', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    data = await res.json();
+  } catch {
+    showProbe('fail', t('probe.failTitle'), [{ text: t('probe.errUnreachable'), tone: 'bad' }], '❌');
+    return null;
+  }
+
+  // --- YouTube -----------------------------------------------------
+  if (data.kind === 'youtube') {
+    state.lastProbe = data;
+    updateKindBadge('youtube');
+    showProbe('ok', t('probe.ytTitle'), [
+      { text: `${t('probe.kind')}: YouTube`, tone: 'good' },
+      { text: `ID: ${data.source.value}`, tone: 'good' },
+    ], '✅');
+    return { kind: 'youtube', value: data.source.value, title: data.source.title || url };
+  }
+
+  // --- Torrent -----------------------------------------------------
+  if (data.kind === 'torrent') {
+    state.lastProbe = data;
+    updateKindBadge('torrent');
+    showProbe('warn', t('probe.torrentTitle'), [
+      { text: `${t('probe.kind')}: Torrent / Magnet`, tone: 'good' },
+      { text: data.source.title || '—' },
+      { text: t('probe.torrentNote'), tone: 'warn' },
+      { text: t('probe.torrentP2P'), tone: 'warn' },
+    ], '🧲');
+    return { kind: 'torrent', value: data.source.value, title: data.source.title };
+  }
+
+  // --- Unsupported --------------------------------------------------
+  if (data.kind !== 'direct') {
+    state.lastProbe = null;
+    updateKindBadge(null);
+    showProbe('fail', t('probe.failTitle'), [
+      { text: t(PROBE_ERRORS[data.error] || 'probe.errUnsupported'), tone: 'bad' },
+    ], '❌');
+    return null;
+  }
+
+  // --- Direct link ---------------------------------------------------
+  const report = data.report || {};
+  state.lastProbe = data;
+  updateKindBadge('direct');
+
+  if (!data.playable) {
+    const reason = report.error
+      ? t(PROBE_ERRORS[report.error] || 'probe.errUnreachable')
+      : `${t('probe.errStatus')}: HTTP ${report.status}`;
+    showProbe('fail', t('probe.failTitle'), [{ text: reason, tone: 'bad' }], '❌');
+    return null;
+  }
+
+  const items = [{ text: t('probe.reachable'), tone: 'good' }];
+  if (report.contentType) items.push({ text: `${t('probe.contentType')}: ${report.contentType}` });
+  if (report.sizeBytes) items.push({ text: `${t('probe.size')}: ${fmtBytes(report.sizeBytes)}` });
+  if (report.isHls) items.push({ text: t('probe.hls'), tone: 'good' });
+
+  items.push(report.seekable
+    ? { text: t('probe.seekable'), tone: 'good' }
+    : { text: t('probe.noSeek'), tone: 'warn' });
+
+  // The key bit for the "works in Iran and abroad" requirement: when the
+  // origin refuses cross-origin playback we transparently switch to the proxy.
+  if (data.proxy) {
+    el.proxyToggle.checked = true;
+    el.proxyWrap.classList.add('is-on');
+    items.push({ text: t('probe.corsClosed'), tone: 'warn' });
+  } else {
+    items.push({ text: t('probe.corsOpen'), tone: 'good' });
+  }
+
+  const warnings = report.warnings || [];
+  if (warnings.includes('not_video_content_type')) items.push({ text: t('probe.notVideo'), tone: 'warn' });
+  if (warnings.includes('container_may_not_play')) items.push({ text: t('probe.container'), tone: 'warn' });
+
+  const hasWarning = warnings.length > 0 || data.proxy || !report.seekable;
+  showProbe(hasWarning ? 'warn' : 'ok',
+    hasWarning ? t('probe.warnTitle') : t('probe.okTitle'),
+    items,
+    hasWarning ? '⚠️' : '✅');
+
+  return {
+    kind: 'direct',
+    value: report.finalUrl || url,
+    title: data.source.title || url,
+    hls: Boolean(report.isHls),
+    proxy: el.proxyToggle.checked,
+  };
+}
+
+el.testBtn.addEventListener('click', async () => {
+  el.testBtn.disabled = true;
+  try {
+    await testLink();
+  } finally {
+    el.testBtn.disabled = false;
+  }
+});
+
+el.probeClose.addEventListener('click', () => { el.probe.hidden = true; });
+
+// Re-testing is required whenever the link changes.
+el.sourceInput.addEventListener('input', () => {
+  state.lastProbe = null;
+  updateKindBadge(null);
+});
+
+el.proxyToggle.addEventListener('change', () => {
+  el.proxyWrap.classList.toggle('is-on', el.proxyToggle.checked);
+});
+
+/** Load = test (if not already tested) then broadcast to the room. */
+el.loadBtn.addEventListener('click', async () => {
+  if (!state.isHost) {
+    toast(t('room.onlyHost'));
+    return;
+  }
+  if (!el.sourceInput.value.trim()) {
+    toast(t('room.enterLink'));
+    return;
+  }
+
+  el.loadBtn.disabled = true;
+  try {
+    const source = await testLink();
+    if (!source) return; // the probe panel already explains why
+
+    if (source.kind === 'direct') source.proxy = el.proxyToggle.checked;
+    socket.emit('player:source', source);
+  } finally {
+    el.loadBtn.disabled = false;
+  }
 });
 
 el.fileBtn.addEventListener('click', () => el.fileInput.click());
@@ -359,11 +727,11 @@ el.fileBtn.addEventListener('click', () => el.fileInput.click());
 el.fileInput.addEventListener('change', () => {
   const file = el.fileInput.files?.[0];
   if (!file) return;
+  teardownPlayback();
   el.video.src = URL.createObjectURL(file);
-  el.video.classList.remove('hidden');
-  el.empty.classList.add('hidden');
-  el.ytHost.classList.add('hidden');
+  showVideoElement();
   el.video.controls = true;
+  updateKindBadge('file');
   if (state.isHost) socket.emit('player:source', { kind: 'file', value: file.name, title: file.name });
   else state.source = { kind: 'file', value: file.name };
   toast(t('room.fileNote'));
@@ -411,5 +779,12 @@ setInterval(() => {
   emitControl(isPlaying(), time, 'heartbeat');
 }, 5000);
 
-/* Keep the role badge translated when the language changes. */
-document.addEventListener('langchange', () => setRole(state.isHost));
+/* Keep translated bits in sync when the language changes. */
+function refreshDynamicText() {
+  setRole(state.isHost);
+  el.sourceInput.placeholder = t('room.sourcePlaceholderAny');
+  el.proxyWrap.title = t('room.proxyHint');
+}
+
+document.addEventListener('langchange', refreshDynamicText);
+refreshDynamicText();

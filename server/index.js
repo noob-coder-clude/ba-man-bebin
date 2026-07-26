@@ -7,6 +7,7 @@ import compression from 'compression';
 import helmet from 'helmet';
 import { Server as SocketServer } from 'socket.io';
 
+import { detectSource, probeDirect, proxyStream } from './media.js';
 import {
   AVATAR_COLORS,
   addMessage,
@@ -38,13 +39,17 @@ app.use(
       useDefaults: true,
       directives: {
         'default-src': ["'self'"],
-        'script-src': ["'self'", "'unsafe-inline'", 'https://www.youtube.com', 'https://s.ytimg.com'],
+        'script-src': ["'self'", "'unsafe-inline'", 'blob:', 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net'],
+        'worker-src': ["'self'", 'blob:'],
+        'child-src': ["'self'", 'blob:'],
         'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
         'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'data:'],
         'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-        'media-src': ["'self'", 'blob:', 'data:', 'https:'],
+        // blob: + https: so torrent streams and direct links both play.
+        'media-src': ["'self'", 'blob:', 'data:', 'https:', 'http:'],
         'frame-src': ['https://www.youtube.com', 'https://www.youtube-nocookie.com'],
-        'connect-src': ["'self'", 'ws:', 'wss:'],
+        // wss: is needed for WebTorrent tracker/peer connections.
+        'connect-src': ["'self'", 'ws:', 'wss:', 'https:', 'http:', 'blob:'],
         'upgrade-insecure-requests': null,
       },
     },
@@ -78,6 +83,66 @@ app.get('/api/rooms/:id', (req, res) => {
   const room = getRoom(id);
   if (!room) return res.status(404).json({ error: 'room_not_found' });
   return res.json({ id: room.id, members: room.members.size, source: room.source });
+});
+
+/* ---------------------------------------------------------------- */
+/* Media: detection, playability test, proxy streaming                */
+/* ---------------------------------------------------------------- */
+
+/** Classify a pasted link without touching the network. */
+app.post('/api/media/detect', (req, res) => {
+  const url = String(req.body?.url || '').slice(0, 4096);
+  res.json(detectSource(url));
+});
+
+/**
+ * "قبلش یه تست بگیره پخش میشه یا نه" — check a link before loading it,
+ * so the host learns about a dead/blocked/unplayable source up front
+ * instead of everyone staring at a black player.
+ */
+app.post('/api/media/probe', async (req, res) => {
+  const url = String(req.body?.url || '').slice(0, 4096);
+  const detected = detectSource(url);
+
+  if (detected.kind === 'youtube') {
+    return res.json({ kind: 'youtube', playable: true, source: detected, proxy: false });
+  }
+
+  if (detected.kind === 'torrent') {
+    // Torrents are streamed peer-to-peer in the browser; reachability
+    // depends on live seeders, which only the client can determine.
+    return res.json({
+      kind: 'torrent',
+      playable: true,
+      needsClientCheck: true,
+      source: detected,
+      proxy: false,
+    });
+  }
+
+  if (detected.kind !== 'direct') {
+    return res.status(400).json({ kind: 'unknown', playable: false, error: 'unsupported_link' });
+  }
+
+  const report = await probeDirect(url);
+  return res.json({
+    kind: 'direct',
+    playable: Boolean(report.ok),
+    proxy: Boolean(report.recommendProxy),
+    source: { ...detected, hls: report.isHls ?? detected.hls },
+    report,
+  });
+});
+
+/**
+ * Stream any reachable video through this server. Guarantees the viewer's
+ * browser only talks to our origin, so CORS and geo-restrictions on the
+ * upstream host stop mattering.
+ */
+app.get('/api/media/proxy', async (req, res) => {
+  const url = String(req.query.url || '');
+  if (!url) return res.status(400).json({ error: 'missing_url' });
+  return proxyStream(url, req, res);
 });
 
 app.get('/room/:id', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'room.html')));
@@ -130,8 +195,17 @@ io.on('connection', (socket) => {
   socket.on('player:source', (payload = {}) => {
     const room = joinedRoom && getRoom(joinedRoom);
     if (!room || room.hostId !== socket.id) return;
-    const kind = payload.kind === 'file' ? 'file' : 'youtube';
-    room.source = { kind, value: clean(payload.value, 500), title: clean(payload.title, 120) };
+
+    const allowed = ['youtube', 'file', 'direct', 'torrent'];
+    const kind = allowed.includes(payload.kind) ? payload.kind : 'youtube';
+
+    room.source = {
+      kind,
+      value: clean(payload.value, 4096),
+      title: clean(payload.title, 160),
+      proxy: Boolean(payload.proxy),
+      hls: Boolean(payload.hls),
+    };
     setState(room, { playing: false, time: 0, rate: 1 });
     io.to(room.id).emit('player:source', { source: room.source, state: projectedState(room) });
   });

@@ -81,6 +81,15 @@ server {
         proxy_set_header Host \$host;
         proxy_read_timeout 3600s;
     }
+    location /api/media/proxy {
+        proxy_pass http://bmb_app;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header Range \$http_range;
+        proxy_set_header If-Range \$http_if_range;
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
     location / {
         proxy_pass http://bmb_app;
         proxy_http_version 1.1;
