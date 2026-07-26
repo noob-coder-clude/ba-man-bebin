@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title data-i18n="meta.title">با من ببین — اتاق تماشا</title>
+<meta name="description" content="اتاق تماشای همزمان" />
+<meta name="theme-color" content="#05060c" />
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" />
+<link rel="stylesheet" href="/assets/css/style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="#fff"/><circle cx="4.2" cy="12" r="2.2" fill="#fff" opacity=".85"/></svg>
+      </span>
+      <span>Ba Man Bebin</span>
+    </a>
+    <div class="nav__actions" style="margin-inline-start:auto">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="fa">FA</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn--ghost btn--sm" href="/" data-i18n="room.leave">خروج</a>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="room-head">
+    <span class="badge badge--live"><i class="dot" style="width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block"></i><span data-i18n="room.live">زنده</span></span>
+    <span class="room-head__id">#<span id="roomId">…</span></span>
+    <span class="badge" id="roleBadge" data-i18n="room.viewer">بیننده</span>
+    <button class="btn btn--sm btn--ghost hidden" id="mirrorBtn" data-i18n="mirror.open" style="margin-inline-start:auto">دامنه‌ها</button>
+    <button class="btn btn--sm" id="copyBtn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+      <span data-i18n="room.copy">کپی لینک دعوت</span>
+    </button>
+  </div>
+
+  <!-- Mirror / multi-domain panel -->
+  <div class="mirrors" id="mirrors" hidden>
+    <div class="mirrors__head">
+      <strong data-i18n="mirror.title">دامنه‌های در دسترس</strong>
+      <span class="mirrors__note" data-i18n="mirror.sameRoom">همه دامنه‌ها به یک سرور وصل‌اند.</span>
+      <button class="probe__close" id="mirrorsClose" aria-label="close">×</button>
+    </div>
+    <ul class="mirrors__list" id="mirrorsList"></ul>
+  </div>
+</div>
+
+<main class="container room-layout">
+  <!-- Player -->
+  <section class="panel">
+    <div class="player-shell" id="playerShell">
+      <div class="player-empty" id="playerEmpty">
+        <div style="font-size:2.6rem">🍿</div>
+        <h3 data-i18n="room.emptyTitle">هنوز ویدیویی انتخاب نشده</h3>
+        <p data-i18n="room.emptyText">میزبان می‌تواند لینک یوتیوب بگذارد یا فایل محلی انتخاب کند.</p>
+      </div>
+      <div id="ytHost" class="hidden" style="width:100%;height:100%"></div>
+      <video id="localVideo" class="hidden" controls playsinline crossorigin="anonymous"></video>
+
+      <!-- Torrent download progress -->
+      <div class="torrent-hud" id="torrentHud" hidden>
+        <div class="torrent-hud__bar"><span id="torrentProgress"></span></div>
+        <div class="torrent-hud__meta" id="torrentMeta"></div>
+      </div>
+    </div>
+
+    <div class="player-bar">
+      <input class="input" id="sourceInput" data-i18n-placeholder="room.sourcePlaceholder" placeholder="لینک یوتیوب / مستقیم / مگنت" autocomplete="off" spellcheck="false" />
+      <span class="badge" id="kindBadge" hidden></span>
+      <button class="btn btn--sm" id="testBtn" data-i18n="room.test">تست پخش</button>
+      <button class="btn btn--primary btn--sm" id="loadBtn" data-i18n="room.load">بارگذاری</button>
+      <button class="btn btn--sm" id="fileBtn" data-i18n="room.pickFile">فایل محلی</button>
+      <button class="btn btn--sm btn--ghost" id="syncBtn" data-i18n="room.sync">همگام‌سازی دوباره</button>
+      <input type="file" id="fileInput" accept="video/*,.mkv,.avi" class="hidden" />
+
+      <label class="proxy-toggle" id="proxyWrap" title="">
+        <input type="checkbox" id="proxyToggle" />
+        <span data-i18n="room.proxy">پخش از طریق سرور</span>
+      </label>
+    </div>
+
+    <!-- Playability test report -->
+    <div class="probe" id="probe" hidden>
+      <div class="probe__head">
+        <span class="probe__icon" id="probeIcon">⏳</span>
+        <strong id="probeTitle" data-i18n="room.testing">در حال بررسی لینک…</strong>
+        <button class="probe__close" id="probeClose" aria-label="close">×</button>
+      </div>
+      <ul class="probe__list" id="probeList"></ul>
+    </div>
+  </section>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="panel side-card">
+      <h4><span data-i18n="room.members">اعضای اتاق</span> · <span id="memberCount">0</span></h4>
+      <div class="members" id="members"></div>
+    </div>
+
+    <div class="panel">
+      <div class="side-card" style="padding-bottom:0"><h4 data-i18n="room.chat">گفتگو</h4></div>
+      <div class="chat">
+        <div class="chat__list" id="chatList"></div>
+        <div class="reactions" id="reactions">
+          <button type="button" data-emoji="😂">😂</button>
+          <button type="button" data-emoji="😍">😍</button>
+          <button type="button" data-emoji="😮">😮</button>
+          <button type="button" data-emoji="🔥">🔥</button>
+          <button type="button" data-emoji="👏">👏</button>
+          <button type="button" data-emoji="😭">😭</button>
+          <button type="button" data-emoji="🍿">🍿</button>
+        </div>
+        <form class="chat__form" id="chatForm">
+          <input class="input" id="chatInput" data-i18n-placeholder="room.msgPlaceholder" placeholder="پیامت را بنویس…" autocomplete="off" maxlength="500" />
+          <button class="btn btn--primary btn--sm" type="submit" data-i18n="room.send">ارسال</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<!-- Name modal -->
+<div class="modal is-open" id="nameModal">
+  <div class="modal__card">
+    <h2 data-i18n="modal.title">ورود به اتاق</h2>
+    <p data-i18n="modal.sub">یک نام برای خودت انتخاب کن.</p>
+    <form id="nameForm">
+      <label class="field-label" for="nameInput" data-i18n="modal.name">نام نمایشی</label>
+      <input class="input" id="nameInput" data-i18n-placeholder="modal.placeholder" placeholder="مثلاً علی" maxlength="24" autocomplete="nickname" required />
+      <button class="btn btn--primary btn--block" type="submit" data-i18n="modal.enter">ورود به اتاق</button>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://www.youtube.com/iframe_api"></script>
+<!-- HLS (.m3u8) playback for browsers without native support -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<!-- Torrent / magnet streaming, loaded lazily by room.js when needed -->
+<script type="module" src="/assets/js/room.js"></script>
+</body>
+</html>

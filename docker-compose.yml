@@ -1,0 +1,35 @@
+services:
+  app:
+    build: .
+    image: ba-man-bebin:latest
+    container_name: bmb-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      MAX_ROOM_USERS: ${MAX_ROOM_USERS:-50}
+      # Comma separated mirrors, all served by this one container.
+      PUBLIC_DOMAINS: ${PUBLIC_DOMAINS:-}
+      DOMAIN_HINTS: ${DOMAIN_HINTS:-}
+    expose:
+      - "3000"
+    networks: [bmb]
+
+  nginx:
+    image: nginx:alpine
+    container_name: bmb-nginx
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/certbot/conf:/etc/letsencrypt:ro
+      - ./deploy/certbot/www:/var/www/certbot:ro
+    networks: [bmb]
+
+networks:
+  bmb:
+    driver: bridge
