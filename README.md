@@ -22,6 +22,18 @@ A sleek, bilingual (فارسی/English, RTL + LTR) watch-party platform. Create 
 
 ---
 
+## ⚡ نصب سریع روی سرور
+
+```bash
+bash deploy/check-ports.sh app.boxd.sh          # ۱. پورت‌ها باز است؟
+git clone https://github.com/noob-coder-clude/ba-man-bebin.git && cd ba-man-bebin
+sudo bash deploy/deploy.sh app.boxd.sh you@example.com   # ۲. نصب کامل
+```
+
+راهنمای کامل قدم‌به‌قدم: **[`INSTALL.md`](INSTALL.md)**
+
+---
+
 ## 🚀 اجرای محلی / Run locally
 
 ```bash
@@ -175,6 +187,8 @@ deploy/
   nginx.conf               ریورس‌پروکسی + WebSocket + SSL
   ba-man-bebin.service     یونیت systemd
   deploy.sh                نصب خودکار روی VPS
+  check-ports.sh           بررسی پورت ۸۰/۴۴۳، DNS، SSL و WebSocket
+  add-domain.sh            افزودن دامنه جدید به همان سرور
 ```
 
 **چطور همگام می‌ماند:** سرور «منبع حقیقت» را نگه می‌دارد (`playing`, `time`, `updatedAt`).
