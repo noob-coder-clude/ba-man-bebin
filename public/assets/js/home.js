@@ -1,4 +1,5 @@
 import { initLangSwitch, t } from './i18n.js';
+import { evaluateMirrors, loadConfig, rememberMirror, urlOnMirror } from './mirrors.js';
 
 initLangSwitch();
 
@@ -72,6 +73,30 @@ document.querySelectorAll('.reveal').forEach((el, i) => {
   el.style.transitionDelay = `${Math.min(i % 6, 5) * 60}ms`;
   observer.observe(el);
 });
+
+/* Mirrors: if this domain is struggling for the visitor, point them at one
+   that works. All domains are the same server, so nothing else changes. */
+(async () => {
+  const cfg = await loadConfig();
+  if (!cfg.multiDomain) return;
+
+  const data = await evaluateMirrors();
+  if (!data || data.currentOk || !data.fastest) return;
+
+  const banner = document.createElement('div');
+  banner.className = 'toast is-visible';
+  banner.style.maxWidth = '380px';
+  banner.innerHTML = `<div style="margin-bottom:8px">${t('mirror.suggest')}</div>`;
+
+  const link = document.createElement('a');
+  link.className = 'btn btn--primary btn--sm';
+  link.textContent = data.fastest.domain;
+  link.href = urlOnMirror(data.fastest.domain);
+  link.addEventListener('click', () => rememberMirror(data.fastest.domain));
+
+  banner.appendChild(link);
+  document.body.appendChild(banner);
+})();
 
 /* Live stats in the hero (optional, silent failure) */
 fetch('/api/stats')

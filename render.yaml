@@ -1,0 +1,28 @@
+# Render blueprint — useful as a BACKUP MIRROR, not as the main host.
+#
+# Heads up: Render's free instances spin down after ~15 minutes of inactivity
+# and take 30-50s to wake, which is painful for a watch party (your guests
+# stare at a loading page). Use the "starter" plan for anything real, or keep
+# this as a fallback domain behind your own server.
+#
+# Deploy: push this repo, then in Render → New → Blueprint → pick this file.
+
+services:
+  - type: web
+    name: ba-man-bebin
+    runtime: node
+    plan: starter          # "free" works but sleeps; see note above
+    region: frankfurt      # closest to IR/EU users
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MAX_ROOM_USERS
+        value: "50"
+      # List every mirror so all of them show up in the domain switcher.
+      - key: PUBLIC_DOMAINS
+        sync: false
+      - key: DOMAIN_HINTS
+        sync: false

@@ -722,6 +722,54 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
 .spin { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Mirrors / multi-domain panel */
+
+.mirrors {
+  margin-bottom: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: fadeUp 0.3s both;
+}
+
+.mirrors__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mirrors__note { font-size: 0.78rem; color: var(--muted); }
+
+.mirrors__list { list-style: none; margin: 0; padding: 6px; display: grid; gap: 4px; }
+
+.mirrors__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  background: var(--surface);
+  border: 1px solid transparent;
+}
+
+.mirrors__item.is-current { border-color: rgba(124, 92, 255, 0.5); background: rgba(124, 92, 255, 0.12); }
+
+.mirrors__host {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.mirrors__status { font-size: 0.76rem; margin-inline-start: auto; white-space: nowrap; }
+.mirrors__status.is-ok { color: var(--ok); }
+.mirrors__status.is-bad { color: var(--accent); }
+.mirrors__status.is-pending { color: var(--muted); }
+
 /* Torrent progress HUD */
 
 .torrent-hud {

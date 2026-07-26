@@ -9,6 +9,9 @@ services:
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       MAX_ROOM_USERS: ${MAX_ROOM_USERS:-50}
+      # Comma separated mirrors, all served by this one container.
+      PUBLIC_DOMAINS: ${PUBLIC_DOMAINS:-}
+      DOMAIN_HINTS: ${DOMAIN_HINTS:-}
     expose:
       - "3000"
     networks: [bmb]

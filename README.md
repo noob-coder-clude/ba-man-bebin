@@ -74,6 +74,16 @@ journalctl -u ba-man-bebin -f      # لاگ زنده
 systemctl restart ba-man-bebin     # ری‌استارت
 ```
 
+### افزودن دامنه‌های بیشتر
+
+```bash
+sudo bash deploy/add-domain.sh dovom.com you@example.com
+```
+
+همه دامنه‌ها به **یک سرور** وصل می‌شوند و اتاق‌ها مشترک‌اند — کاربر هر کدام که
+برایش باز شد استفاده می‌کند. جزئیات و دلیل اینکه چرا «ریدایرکت بر اساس IP» جواب
+نمی‌دهد: [`deploy/MIRRORS.md`](deploy/MIRRORS.md)
+
 ### به‌روزرسانی بعدی
 
 ```bash
@@ -137,6 +147,8 @@ sudo bash deploy/deploy.sh example.com
 | `CORS_ORIGIN` | `*` | دامنه‌های مجاز Socket.IO (با کاما جدا شود) |
 | `MAX_ROOM_USERS` | `50` | حداکثر نفرات هر اتاق |
 | `ALLOW_PRIVATE_MEDIA_HOSTS` | خاموش | اجازه پراکسی به آدرس‌های داخلی/LAN (ریسک SSRF) |
+| `PUBLIC_DOMAINS` | — | دامنه‌های آینه (با کاما)، همه روی همین سرور |
+| `DOMAIN_HINTS` | — | پیشنهاد دامنه بر اساس کشور، مثل `IR=watch.ir` |
 | `PUBLIC_ORIGIN` | — | آدرس عمومی سایت |
 
 ---
@@ -148,6 +160,7 @@ server/
   index.js     Express + Socket.IO؛ مسیرها، امنیت (helmet/CSP)، رویدادهای بلادرنگ
   rooms.js     نگهدارنده حالت اتاق‌ها در حافظه + برون‌یابی زمان پخش
   media.js     تشخیص نوع لینک، تست پخش (probe) و پراکسی استریم
+  domains.js   پشتیبانی چند دامنه روی یک سرور + هدر کشور
   net-guard.js سپر SSRF: بررسی IP و اعتبارسنجی دوباره در هر ریدایرکت
 public/
   index.html   لندینگ‌پیج
@@ -155,6 +168,7 @@ public/
   404.html
   assets/css/style.css     دیزاین‌سیستم (تیره، شیشه‌ای، RTL/LTR)
   assets/js/i18n.js        دیکشنری دو زبانه + تغییر جهت صفحه
+  assets/js/mirrors.js     تست دامنه‌ها در مرورگر + سوییچ بین آینه‌ها
   assets/js/home.js        منطق لندینگ
   assets/js/room.js        پلیر یکپارچه (YouTube/mp4/HLS/تورنت/فایل)، تست لینک، چت، همگام‌سازی
 deploy/
@@ -193,6 +207,8 @@ deploy/
 | `GET` | `/api/rooms/:id` | اطلاعات اتاق |
 | `GET` | `/api/stats` | آمار زنده |
 | `GET` | `/healthz` | health check |
+| `GET` | `/ping` | بیکن سبک و CORS-باز برای تست دسترس‌پذیری دامنه |
+| `GET` | `/api/config` | لیست دامنه‌ها + کشور کاربر (برای سوییچر دامنه) |
 
 ---
 

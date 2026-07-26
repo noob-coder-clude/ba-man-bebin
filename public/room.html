@@ -35,10 +35,21 @@
     <span class="badge badge--live"><i class="dot" style="width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block"></i><span data-i18n="room.live">زنده</span></span>
     <span class="room-head__id">#<span id="roomId">…</span></span>
     <span class="badge" id="roleBadge" data-i18n="room.viewer">بیننده</span>
-    <button class="btn btn--sm" id="copyBtn" style="margin-inline-start:auto">
+    <button class="btn btn--sm btn--ghost hidden" id="mirrorBtn" data-i18n="mirror.open" style="margin-inline-start:auto">دامنه‌ها</button>
+    <button class="btn btn--sm" id="copyBtn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
       <span data-i18n="room.copy">کپی لینک دعوت</span>
     </button>
+  </div>
+
+  <!-- Mirror / multi-domain panel -->
+  <div class="mirrors" id="mirrors" hidden>
+    <div class="mirrors__head">
+      <strong data-i18n="mirror.title">دامنه‌های در دسترس</strong>
+      <span class="mirrors__note" data-i18n="mirror.sameRoom">همه دامنه‌ها به یک سرور وصل‌اند.</span>
+      <button class="probe__close" id="mirrorsClose" aria-label="close">×</button>
+    </div>
+    <ul class="mirrors__list" id="mirrorsList"></ul>
   </div>
 </div>
 

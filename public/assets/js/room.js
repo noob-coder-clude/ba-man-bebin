@@ -1,4 +1,11 @@
 import { initLangSwitch, t } from './i18n.js';
+import {
+  bestInviteLink,
+  evaluateMirrors,
+  loadConfig,
+  rememberMirror,
+  urlOnMirror,
+} from './mirrors.js';
 
 initLangSwitch();
 
@@ -39,6 +46,10 @@ const el = {
   reactions: document.getElementById('reactions'),
   roleBadge: document.getElementById('roleBadge'),
   copyBtn: document.getElementById('copyBtn'),
+  mirrorBtn: document.getElementById('mirrorBtn'),
+  mirrors: document.getElementById('mirrors'),
+  mirrorsList: document.getElementById('mirrorsList'),
+  mirrorsClose: document.getElementById('mirrorsClose'),
   modal: document.getElementById('nameModal'),
   nameForm: document.getElementById('nameForm'),
   nameInput: document.getElementById('nameInput'),
@@ -756,20 +767,117 @@ el.reactions.addEventListener('click', (event) => {
   if (emoji) socket?.emit('chat:reaction', { emoji });
 });
 
-el.copyBtn.addEventListener('click', async () => {
-  const link = window.location.href;
+async function copyText(text) {
   try {
-    await navigator.clipboard.writeText(link);
+    await navigator.clipboard.writeText(text);
   } catch {
     const tmp = document.createElement('input');
-    tmp.value = link;
+    tmp.value = text;
     document.body.appendChild(tmp);
     tmp.select();
     document.execCommand('copy');
     tmp.remove();
   }
+}
+
+el.copyBtn.addEventListener('click', async () => {
+  // Hand out a domain that is actually reachable from this visitor's network,
+  // so the invite has the best chance of opening for their friends too.
+  const link = await bestInviteLink();
+  await copyText(link);
   toast(t('room.copied'));
 });
+
+/* ------------------------------------------------------------------ */
+/* Mirrors: one server, several domains                                 */
+/* ------------------------------------------------------------------ */
+
+function renderMirrors(data, cfg) {
+  el.mirrorsList.innerHTML = '';
+
+  cfg.domains.forEach((domain) => {
+    const result = data?.results?.find((r) => r.domain === domain);
+    const isCurrent = domain === cfg.current;
+
+    const li = document.createElement('li');
+    li.className = `mirrors__item${isCurrent ? ' is-current' : ''}`;
+
+    const host = document.createElement('span');
+    host.className = 'mirrors__host';
+    host.textContent = domain;
+    li.appendChild(host);
+
+    if (isCurrent) {
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = t('mirror.current');
+      li.appendChild(badge);
+    }
+
+    const status = document.createElement('span');
+    if (!result) {
+      status.className = 'mirrors__status is-pending';
+      status.textContent = '…';
+    } else if (result.ok) {
+      status.className = 'mirrors__status is-ok';
+      status.textContent = `✓ ${t('mirror.ok')}${result.ms ? ` · ${result.ms}ms` : ''}`;
+    } else {
+      status.className = 'mirrors__status is-bad';
+      status.textContent = `✕ ${t('mirror.blocked')}`;
+    }
+    li.appendChild(status);
+
+    if (!isCurrent && result?.ok) {
+      const go = document.createElement('button');
+      go.className = 'btn btn--sm';
+      go.textContent = t('mirror.switch');
+      go.addEventListener('click', () => {
+        rememberMirror(domain);
+        // Same path → same room, just a different door into the same server.
+        window.location.href = urlOnMirror(domain);
+      });
+      li.appendChild(go);
+    }
+
+    el.mirrorsList.appendChild(li);
+  });
+
+  const copyBest = document.createElement('li');
+  copyBest.className = 'mirrors__item';
+  const btn = document.createElement('button');
+  btn.className = 'btn btn--sm btn--primary';
+  btn.textContent = t('mirror.copyBest');
+  btn.addEventListener('click', async () => {
+    await copyText(await bestInviteLink());
+    toast(t('mirror.inviteNote'));
+  });
+  copyBest.appendChild(btn);
+  el.mirrorsList.appendChild(copyBest);
+}
+
+async function initMirrors() {
+  const cfg = await loadConfig();
+  if (!cfg.multiDomain) return; // single domain: keep the UI clean
+
+  el.mirrorBtn.classList.remove('hidden');
+  el.mirrorBtn.addEventListener('click', () => {
+    el.mirrors.hidden = !el.mirrors.hidden;
+  });
+  el.mirrorsClose.addEventListener('click', () => { el.mirrors.hidden = true; });
+
+  renderMirrors(null, cfg);
+
+  const data = await evaluateMirrors();
+  renderMirrors(data, cfg);
+
+  // Only nag the user when their current domain is genuinely broken.
+  if (data && !data.currentOk && data.fastest) {
+    el.mirrors.hidden = false;
+    toast(`${t('mirror.suggest')} ${data.fastest.domain}`);
+  }
+}
+
+initMirrors();
 
 /* Host heartbeat: keep everyone aligned every 5 seconds. */
 setInterval(() => {

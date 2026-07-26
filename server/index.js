@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import { Server as SocketServer } from 'socket.io';
 
 import { detectSource, probeDirect, proxyStream } from './media.js';
+import { clientConfig, listDomains, requestHost } from './domains.js';
 import {
   AVATAR_COLORS,
   addMessage,
@@ -68,8 +69,31 @@ app.use(
   }),
 );
 
-app.get('/healthz', (_req, res) => res.json({ ok: true, uptime: process.uptime(), ...stats() }));
+/**
+ * Reachability beacon. Deliberately tiny, uncached and CORS-open so a browser
+ * on mirror A can test whether mirror B answers for *this particular user*.
+ * That client-side race is what actually detects filtering — see domains.js.
+ */
+app.get('/ping', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ ok: true, host: requestHost(req), t: Date.now() });
+});
+
+app.get('/healthz', (_req, res) => res.json({
+  ok: true,
+  uptime: process.uptime(),
+  domains: listDomains(),
+  ...stats(),
+}));
+
 app.get('/api/stats', (_req, res) => res.json(stats()));
+
+/** Mirrors + soft country hint, consumed by the client on page load. */
+app.get('/api/config', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(clientConfig(req));
+});
 
 app.post('/api/rooms', (_req, res) => {
   let id = createRoomId();
