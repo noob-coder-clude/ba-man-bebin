@@ -11,6 +11,10 @@
 <link rel="stylesheet" href="/assets/css/style.css" />
 </head>
 <body>
+<div id="updateBar" style="display:none;background:#ff9800;color:#000;text-align:center;padding:10px;font-weight:bold;z-index:9999;position:relative;">
+  <span data-i18n="update.available">بروزرسانی جدید در دسترس است!</span>
+  <button id="updateBtn" style="margin-left:10px;padding:5px 10px;background:#000;color:#fff;border:none;border-radius:4px;cursor:pointer;">به‌روزرسانی کن</button>
+</div>
 
 <header class="site-header">
   <div class="container nav">
@@ -63,7 +67,10 @@
         <p data-i18n="room.emptyText">میزبان می‌تواند لینک یوتیوب بگذارد یا فایل محلی انتخاب کند.</p>
       </div>
       <div id="ytHost" class="hidden" style="width:100%;height:100%"></div>
-      <video id="localVideo" class="hidden" controls playsinline crossorigin="anonymous"></video>
+      <video id="localVideo" class="hidden" controls playsinline webkit-playsinline crossorigin="anonymous"></video>
+      <div id="playOverlay" class="hidden" style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;z-index:50;cursor:pointer;">
+        <button id="overlayPlayBtn" style="font-size:4rem;background:none;border:none;color:white;cursor:pointer;">▶️</button>
+      </div>
 
       <!-- Torrent download progress -->
       <div class="torrent-hud" id="torrentHud" hidden>
@@ -148,5 +155,6 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <!-- Torrent / magnet streaming, loaded lazily by room.js when needed -->
 <script type="module" src="/assets/js/room.js"></script>
+<script src="/assets/js/updater-client.js"></script>
 </body>
 </html>

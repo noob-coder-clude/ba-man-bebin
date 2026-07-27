@@ -21,6 +21,8 @@ const el = {
   empty: document.getElementById('playerEmpty'),
   ytHost: document.getElementById('ytHost'),
   video: document.getElementById('localVideo'),
+  playOverlay: document.getElementById('playOverlay'),
+  overlayPlayBtn: document.getElementById('overlayPlayBtn'),
   sourceInput: document.getElementById('sourceInput'),
   loadBtn: document.getElementById('loadBtn'),
   testBtn: document.getElementById('testBtn'),
@@ -169,7 +171,14 @@ const player = {
   },
   play() {
     if (this.kind === 'youtube') state.ytPlayer?.playVideo?.();
-    else el.video.play().catch(() => {});
+    else {
+      el.video.play().catch((err) => {
+        if (err.name === 'NotAllowedError') {
+          el.playOverlay.classList.remove('hidden');
+          el.playOverlay.style.display = 'flex';
+        }
+      });
+    }
   },
   pause() {
     if (this.kind === 'youtube') state.ytPlayer?.pauseVideo?.();
@@ -308,6 +317,8 @@ function applySource(source, playback) {
   teardownPlayback();
   state.source = source;
   if (!source) return;
+
+  if (source.value) lastLoadedUrl = source.value;
 
   updateKindBadge(source.kind);
 
@@ -701,13 +712,36 @@ el.testBtn.addEventListener('click', async () => {
 el.probeClose.addEventListener('click', () => { el.probe.hidden = true; });
 
 // Re-testing is required whenever the link changes.
+let debounceTimer = null;
+let lastLoadedUrl = null;
+
 el.sourceInput.addEventListener('input', () => {
   state.lastProbe = null;
   updateKindBadge(null);
+  
+  if (!state.isHost) return;
+  const url = el.sourceInput.value.trim();
+  if (!url || url === lastLoadedUrl) return;
+
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    el.loadBtn.click();
+  }, 900);
 });
 
 el.proxyToggle.addEventListener('change', () => {
   el.proxyWrap.classList.toggle('is-on', el.proxyToggle.checked);
+});
+
+el.playOverlay.addEventListener('click', () => {
+  el.playOverlay.classList.add('hidden');
+  el.playOverlay.style.display = '';
+  el.video.play().catch((err) => {
+    if (err.name === 'NotAllowedError') {
+      el.video.muted = true;
+      el.video.play().catch(() => {});
+    }
+  });
 });
 
 /** Load = test (if not already tested) then broadcast to the room. */
@@ -716,7 +750,8 @@ el.loadBtn.addEventListener('click', async () => {
     toast(t('room.onlyHost'));
     return;
   }
-  if (!el.sourceInput.value.trim()) {
+  const url = el.sourceInput.value.trim();
+  if (!url) {
     toast(t('room.enterLink'));
     return;
   }
@@ -728,6 +763,7 @@ el.loadBtn.addEventListener('click', async () => {
 
     if (source.kind === 'direct') source.proxy = el.proxyToggle.checked;
     socket.emit('player:source', source);
+    lastLoadedUrl = url;
   } finally {
     el.loadBtn.disabled = false;
   }

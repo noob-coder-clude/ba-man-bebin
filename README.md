@@ -4,6 +4,18 @@
 
 A sleek, bilingual (فارسی/English, RTL + LTR) watch-party platform. Create a room, share the link, and watch in perfect sync.
 
+## فهرست مطالب
+- [امکانات / Features](#-امکانات--features)
+- [نصب سریع روی سرور](#-نصب-سریع-روی-سرور)
+- [اجرای محلی / Run locally](#-اجرای-محلی--run-locally)
+- [روش ۱ — Docker (پیشنهادی)](#-روش-۱--docker-پیشنهادی)
+- [روش ۲ — نصب مستقیم روی سرور (Ubuntu/Debian)](#️-روش-۲--نصب-مستقیم-روی-سرور-ubuntudebian)
+- [منابع ویدیو / Video sources](#-منابع-ویدیو--video-sources)
+- [تنظیمات / Configuration](#️-تنظیمات--configuration)
+- [معماری / Architecture](#-معماری--architecture)
+- [API](#-api)
+- [نکات](#-نکات)
+
 ---
 
 ## ✨ امکانات / Features
