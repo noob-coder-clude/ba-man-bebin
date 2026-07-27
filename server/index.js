@@ -14,18 +14,23 @@ import { transcodeStream } from './transcode.js';
 import { handleYoutubeCookies } from './youtube.js';
 import { handleUpdater } from './updater.js';
 import { clientConfig, listDomains, requestHost } from './domains.js';
+import { handleIce } from './ice.js';
 import {
   AVATAR_COLORS,
   addMessage,
+  callPeers,
   createRoomId,
   ensureRoom,
   getRoom,
+  joinCall,
+  leaveCall,
   normalizeRoomId,
   projectedState,
   removeRoomIfEmpty,
   roomSnapshot,
   setState,
   stats,
+  updateCallPeer,
 } from './rooms.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +39,15 @@ const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PORT = Number(process.env.PORT || 3000);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const MAX_ROOM_USERS = Number(process.env.MAX_ROOM_USERS || 50);
+
+/**
+ * Mesh calls are O(n²): with N people every browser uploads N-1 streams.
+ * Simulated at 600 kbps per outgoing stream:
+ *   4 people → 1.8 Mbps up   (fine)
+ *   5 people → 2.4 Mbps up   (struggles on a typical Iranian mobile uplink)
+ * So 4 is the supported ceiling; beyond it we warn instead of pretending.
+ */
+const MAX_CALL_PEERS = Number(process.env.MAX_CALL_PEERS || 4);
 
 const app = express();
 app.disable('x-powered-by');
@@ -52,7 +66,8 @@ app.use(
         'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'data:'],
         'img-src': ["'self'", 'data:', 'blob:', 'https:'],
         // blob: + https: so torrent streams and direct links both play.
-        'media-src': ["'self'", 'blob:', 'data:', 'https:', 'http:'],
+        // mediastream: is for the WebRTC call tiles (video.srcObject).
+        'media-src': ["'self'", 'blob:', 'data:', 'mediastream:', 'https:', 'http:'],
         'frame-src': ['https://www.youtube.com', 'https://www.youtube-nocookie.com'],
         // wss: is needed for WebTorrent tracker/peer connections.
         'connect-src': ["'self'", 'ws:', 'wss:', 'https:', 'http:', 'blob:'],
@@ -67,6 +82,7 @@ app.use(express.json({ limit: '32kb' }));
 
 handleYoutubeCookies(app);
 handleUpdater(app);
+handleIce(app);
 
 app.use(
   express.static(PUBLIC_DIR, {
@@ -365,6 +381,100 @@ io.on('connection', (socket) => {
     socket.to(room.id).emit('chat:typing', { name: member.name, typing: Boolean(payload.typing) });
   });
 
+  /* ---------------------------------------------------------------- */
+  /* WebRTC calls: signalling only — media never touches this server.   */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Join the room's call. The ack carries the list of peers already in it;
+   * the client then decides who offers to whom using the "lower socket id
+   * offers" rule, which is what keeps a 4-way mesh at exactly 6 clean
+   * connections with zero glare (no two peers offering each other at once).
+   */
+  socket.on('call:join', (payload = {}, ack) => {
+    const room = joinedRoom && getRoom(joinedRoom);
+    const member = room?.members.get(socket.id);
+    if (!room || !member) return ack?.({ error: 'not_in_room' });
+
+    const already = room.call.has(socket.id);
+    if (!already && room.call.size >= MAX_CALL_PEERS) {
+      return ack?.({ error: 'call_full', max: MAX_CALL_PEERS, peers: callPeers(room) });
+    }
+
+    const peer = joinCall(room, socket.id, { video: payload.video, audio: payload.audio });
+    if (!peer) return ack?.({ error: 'not_in_room' });
+
+    // Peers as seen *before* this join — the newcomer connects to these.
+    const others = callPeers(room).filter((p) => p.id !== socket.id);
+    socket.to(room.id).emit('call:peer-joined', { peer, peers: callPeers(room) });
+    return ack?.({ ok: true, me: peer, peers: others, max: MAX_CALL_PEERS });
+  });
+
+  /** Leave the call but stay in the room (chat + video keep working). */
+  socket.on('call:leave', (_payload, ack) => {
+    const room = joinedRoom && getRoom(joinedRoom);
+    if (!room) return ack?.({ error: 'not_in_room' });
+    if (leaveCall(room, socket.id)) {
+      io.to(room.id).emit('call:peer-left', { peerId: socket.id, peers: callPeers(room) });
+    }
+    return ack?.({ ok: true });
+  });
+
+  /** Mic / camera toggles — pure UI state, so everyone can render it. */
+  socket.on('call:state', (payload = {}) => {
+    const room = joinedRoom && getRoom(joinedRoom);
+    if (!room) return;
+    const peer = updateCallPeer(room, socket.id, {
+      video: typeof payload.video === 'boolean' ? payload.video : undefined,
+      audio: typeof payload.audio === 'boolean' ? payload.audio : undefined,
+    });
+    if (!peer) return;
+    io.to(room.id).emit('call:peer-state', { peer, peers: callPeers(room) });
+  });
+
+  /**
+   * Relay SDP / ICE to exactly one peer in the same room.
+   * Everything is addressed point-to-point: the server never broadcasts
+   * signalling, so a 4-way mesh stays 6 independent negotiations.
+   */
+  const MAX_SDP = 64 * 1024; // real offers are ~4-8 KB; this is a sane ceiling
+
+  const relay = (event, project) => (payload = {}) => {
+    const room = joinedRoom && getRoom(joinedRoom);
+    if (!room || !room.call.has(socket.id)) return;
+    const targetId = clean(payload.to, 64);
+    if (!targetId || targetId === socket.id || !room.members.has(targetId)) return;
+    const body = project(payload);
+    if (!body) return;
+    io.to(targetId).emit(event, { ...body, from: socket.id });
+  };
+
+  const projectSdp = (kind) => (payload) => {
+    const desc = payload.description || payload.sdp;
+    const sdp = typeof desc?.sdp === 'string' ? desc.sdp : null;
+    if (!sdp || sdp.length > MAX_SDP) return null;
+    const type = desc.type === kind ? kind : null;
+    if (!type) return null;
+    return { description: { type, sdp } };
+  };
+
+  socket.on('call:offer', relay('call:offer', projectSdp('offer')));
+  socket.on('call:answer', relay('call:answer', projectSdp('answer')));
+  socket.on('call:ice-candidate', relay('call:ice-candidate', (payload) => {
+    const c = payload.candidate;
+    // null candidate = end-of-candidates; browsers send it and it is valid.
+    if (c === null) return { candidate: null };
+    if (!c || typeof c.candidate !== 'string' || c.candidate.length > 1024) return null;
+    return {
+      candidate: {
+        candidate: c.candidate,
+        sdpMid: typeof c.sdpMid === 'string' ? c.sdpMid.slice(0, 64) : null,
+        sdpMLineIndex: Number.isInteger(c.sdpMLineIndex) ? c.sdpMLineIndex : null,
+        usernameFragment: typeof c.usernameFragment === 'string' ? c.usernameFragment.slice(0, 256) : undefined,
+      },
+    };
+  }));
+
   socket.on('room:transfer-host', (payload = {}) => {
     const room = joinedRoom && getRoom(joinedRoom);
     if (!room || room.hostId !== socket.id) return;
@@ -383,6 +493,12 @@ io.on('connection', (socket) => {
     if (!room) return;
     const member = room.members.get(socket.id);
     room.members.delete(socket.id);
+
+    // Drop them from the call roster too, otherwise everyone keeps a dead
+    // RTCPeerConnection around and the thumbnail strip shows a ghost.
+    if (leaveCall(room, socket.id)) {
+      io.to(room.id).emit('call:peer-left', { peerId: socket.id, peers: callPeers(room) });
+    }
 
     if (room.hostId === socket.id) {
       const next = room.members.values().next().value;

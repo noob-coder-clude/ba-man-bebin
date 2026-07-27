@@ -51,6 +51,9 @@ export function ensureRoom(roomId) {
         rate: 1,
       },
       members: new Map(), // socketId -> { id, name, color, isHost }
+      // Everyone currently in the voice/video call (a subset of members).
+      // socketId -> { id, name, color, video, audio, joinedAt }
+      call: new Map(),
       messages: [], // last 100 chat messages
     };
     rooms.set(roomId, room);
@@ -65,8 +68,49 @@ export function roomSnapshot(room) {
     source: room.source,
     state: projectedState(room),
     members: [...room.members.values()],
+    call: callPeers(room),
     messages: room.messages.slice(-60),
   };
+}
+
+/** Participants of the WebRTC call in this room. */
+export function callPeers(room) {
+  return room?.call ? [...room.call.values()] : [];
+}
+
+/** Add a member to the call roster. Returns the peer record. */
+export function joinCall(room, socketId, { video, audio } = {}) {
+  const member = room.members.get(socketId);
+  if (!member) return null;
+  const peer = {
+    id: socketId,
+    name: member.name,
+    color: member.color,
+    video: video !== false,
+    audio: audio !== false,
+    joinedAt: Date.now(),
+  };
+  room.call.set(socketId, peer);
+  room.updatedAt = Date.now();
+  return peer;
+}
+
+/** Remove a member from the call roster. Returns true if they were in it. */
+export function leaveCall(room, socketId) {
+  if (!room?.call?.has(socketId)) return false;
+  room.call.delete(socketId);
+  room.updatedAt = Date.now();
+  return true;
+}
+
+/** Update mic/camera flags of a peer already in the call. */
+export function updateCallPeer(room, socketId, patch = {}) {
+  const peer = room?.call?.get(socketId);
+  if (!peer) return null;
+  if (typeof patch.video === 'boolean') peer.video = patch.video;
+  if (typeof patch.audio === 'boolean') peer.audio = patch.audio;
+  room.updatedAt = Date.now();
+  return peer;
 }
 
 /** Extrapolate the current playhead so late joiners land on the right frame. */
