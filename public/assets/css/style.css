@@ -350,9 +350,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
 
 .mockup__play::after {
   content: '';
-  border-inline-start: 16px solid #fff;
-  border-block: 10px solid transparent;
-  margin-inline-start: 4px;
+  border-left: 16px solid #fff;
+  border-top: 10px solid transparent;
+  border-bottom: 10px solid transparent;
+  margin-left: 4px;
 }
 
 .mockup__progress {
@@ -974,7 +975,91 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
 
 .field-label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
 
+/* Play gate overlay — shown when autoplay is blocked by the browser */
+
+.play-gate {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 50;
+  cursor: pointer;
+}
+
+.play-gate__btn {
+  width: 72px;
+  height: 72px;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.2s, background 0.2s;
+}
+
+.play-gate__btn:hover { transform: scale(1.1); background: rgba(255, 255, 255, 0.25); }
+.play-gate__btn:active { transform: scale(0.95); }
+
+.play-gate__btn::after {
+  content: '';
+  border-left: 22px solid #fff;
+  border-top: 14px solid transparent;
+  border-bottom: 14px solid transparent;
+  position: absolute;
+  top: 50%;
+  left: 55%;
+  transform: translate(-50%, -50%);
+}
+
 .hidden { display: none !important; }
+
+/* Gesture HUD — shows brightness/volume/seek feedback during touch gestures */
+
+.gesture-hud {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 40;
+  padding: 14px 20px;
+  border-radius: 16px;
+  background: rgba(6, 8, 15, 0.88);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+
+.gesture-hud.is-visible { opacity: 1; }
+
+.gesture-hud__icon { font-size: 1.6rem; }
+
+.gesture-hud__bar {
+  width: 120px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+}
+
+.gesture-hud__fill {
+  height: 100%;
+  width: 50%;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  transition: width 0.15s ease;
+}
+
+.gesture-hud__label { font-size: 0.85rem; color: var(--text); font-weight: 700; }
 
 .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
 .reveal.is-visible { opacity: 1; transform: none; }
@@ -1009,6 +1094,32 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
   .mockup__screen { grid-template-columns: 1fr; }
   .mockup__chat { border-inline-start: 0; border-top: 1px solid var(--border); }
   .hero__stats { gap: 18px; }
+
+  /* Mobile room optimizations */
+  .room-layout { gap: 10px; padding: 10px 0 20px; }
+  .room-head { padding: 10px 0; }
+  .player-bar { gap: 6px; padding: 10px; flex-wrap: wrap; }
+  .player-bar .input { flex: 1 1 150px; font-size: 0.85rem; padding: 9px 10px; }
+  .player-bar .btn { min-height: 44px; }
+  .player-bar .proxy-toggle { min-height: 44px; display: flex; align-items: center; }
+
+  .side-card { padding: 10px; }
+  .chat { height: min(50vh, 400px); }
+  .chat__form .input { padding: 9px 10px; }
+  .chat__form .btn { min-height: 44px; }
+  .reactions button { min-height: 36px; min-width: 36px; padding: 4px 8px; }
+}
+
+@media (max-width: 480px) {
+  .player-bar { flex-wrap: wrap; }
+  .player-bar .input { flex: 1 1 100%; }
+  .player-bar .btn--sm { font-size: 0.8rem; padding: 8px 10px; }
+  .player-bar .proxy-toggle { width: 100%; order: 10; }
+  .chat { height: min(45vh, 350px); }
+  .nav { height: 56px; gap: 10px; }
+  .brand__mark { width: 30px; height: 30px; border-radius: 10px; }
+  .btn { min-height: 44px; padding: 10px 16px; }
+  .play-gate__btn { width: 64px; height: 64px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

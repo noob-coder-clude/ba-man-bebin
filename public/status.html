@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title data-i18n="status.title">با من ببین — وضعیت سرور</title>
+<meta name="theme-color" content="#05060c" />
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" />
+<link rel="stylesheet" href="/assets/css/style.css" />
+<style>
+  .status-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: clamp(40px, 8vw, 80px) 0;
+  }
+
+  .ring-container {
+    position: relative;
+    width: 180px;
+    height: 180px;
+  }
+
+  .ring-svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .ring-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 10;
+  }
+
+  .ring-progress {
+    fill: none;
+    stroke: var(--ok);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.8s ease, stroke 0.3s;
+  }
+
+  .ring-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ring-pct {
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .ring-label {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    width: min(100% - 40px, 520px);
+  }
+
+  .status-card {
+    padding: 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.012));
+  }
+
+  .status-card h4 {
+    margin: 0 0 8px;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+
+  .status-card .value {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+
+  .status-card .sub {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .status-card.wide {
+    grid-column: span 2;
+  }
+
+  .status-header {
+    text-align: center;
+    max-width: 500px;
+  }
+
+  .status-header h1 {
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+  }
+
+  .status-header p {
+    color: var(--muted);
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 700;
+    border: 1px solid rgba(52, 211, 153, 0.4);
+    background: rgba(52, 211, 153, 0.1);
+    color: var(--ok);
+  }
+
+  .tag.is-down {
+    border-color: rgba(255, 77, 141, 0.4);
+    background: rgba(255, 77, 141, 0.1);
+    color: var(--accent);
+  }
+
+  @media (max-width: 480px) {
+    .status-grid { grid-template-columns: 1fr; }
+    .status-card.wide { grid-column: span 1; }
+    .ring-container { width: 140px; height: 140px; }
+  }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="/">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" fill="#fff"/><circle cx="4.2" cy="12" r="2.2" fill="#fff" opacity=".85"/></svg>
+      </span>
+      <span>Ba Man Bebin</span>
+    </a>
+    <div class="nav__actions" style="margin-inline-start:auto">
+      <div class="lang-switch" role="group" aria-label="Language">
+        <button type="button" data-lang="fa">FA</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+      <a class="btn btn--ghost btn--sm" href="/" data-i18n="status.backHome">بازگشت</a>
+    </div>
+  </div>
+</header>
+
+<main class="container status-page">
+  <div class="status-header">
+    <h1 data-i18n="status.title">وضعیت سرور</h1>
+    <p id="statusTagLine" data-i18n="status.tagLine">همه‌چیز سالم است ✅</p>
+  </div>
+
+  <!-- Health ring -->
+  <div class="ring-container">
+    <svg class="ring-svg" viewBox="0 0 180 180">
+      <circle class="ring-bg" cx="90" cy="90" r="80" />
+      <circle class="ring-progress" id="ringProgress" cx="90" cy="90" r="80"
+        stroke-dasharray="502.65" stroke-dashoffset="502.65" />
+    </svg>
+    <div class="ring-text">
+      <span class="ring-pct" id="ringPct">—</span>
+      <span class="ring-label" data-i18n="status.health">سلامت</span>
+    </div>
+  </div>
+
+  <div class="status-grid" id="statusGrid">
+    <!-- Cards injected by JS -->
+  </div>
+
+  <div style="text-align:center;color:var(--muted);font-size:0.82rem;margin-top:20px" id="lastRefresh"></div>
+</main>
+
+<footer class="site-footer">
+  <div class="container site-footer__inner">
+    <div>ساخته شده با ❤️<br><span data-i18n="footer.brand">BA MAN BEBIN 2026</span></div>
+  </div>
+</footer>
+
+<script type="module">
+import { initLangSwitch, t } from '/assets/js/i18n.js';
+
+initLangSwitch();
+
+const grid = document.getElementById('statusGrid');
+const ringProgress = document.getElementById('ringProgress');
+const ringPct = document.getElementById('ringPct');
+const tagLine = document.getElementById('statusTagLine');
+const lastRefresh = document.getElementById('lastRefresh');
+
+const CIRC = 2 * Math.PI * 80; // ≈ 502.65
+
+function card(title, value, sub, wide = false) {
+  const div = document.createElement('div');
+  div.className = 'status-card' + (wide ? ' wide' : '');
+  div.innerHTML = `<h4>${title}</h4><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ''}`;
+  return div;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/system');
+    const data = await res.json();
+
+    // Health ring
+    const pct = data.healthPct || 0;
+    ringPct.textContent = pct + '%';
+    ringProgress.style.strokeDashoffset = CIRC - (CIRC * pct / 100);
+    ringProgress.style.stroke = pct >= 70 ? 'var(--ok)' : pct >= 40 ? 'var(--warn)' : 'var(--accent)';
+
+    tagLine.textContent = data.ok
+      ? t('status.allGood')
+      : t('status.problems');
+
+    grid.innerHTML = '';
+    grid.appendChild(card(t('status.uptime'), data.uptimeHuman, `${t('status.rooms')}: ${data.rooms} · ${t('status.users')}: ${data.users}`));
+    grid.appendChild(card(t('status.cpu'), `${data.cpu.cores} ${t('status.cores')}`, data.cpu.model));
+    grid.appendChild(card(t('status.memUsed'), data.memory.usedHuman, `${data.memory.freeHuman} ${t('status.free')} / ${data.memory.totalHuman} ${t('status.total')}`));
+    grid.appendChild(card(t('status.load'), data.cpu.loadAvg.join(' / '), `${t('status.perCore')}`));
+    grid.appendChild(card(t('status.nodeVer'), data.nodeVersion, '', true));
+    if (data.ffmpeg) grid.appendChild(card(t('status.ffmpeg'), data.ffmpeg.split(' ')[0], data.ffmpeg, true));
+    if (data.ytdlp) grid.appendChild(card(t('status.ytdlp'), data.ytdlp, '', true));
+
+    lastRefresh.textContent = `${t('status.refreshed')}: ${new Date().toLocaleTimeString()}`;
+  } catch {
+    ringPct.textContent = '⚠️';
+    ringProgress.style.strokeDashoffset = CIRC - (CIRC * 50 / 100);
+    ringProgress.style.stroke = 'var(--accent)';
+    tagLine.textContent = t('status.unreachable');
+    lastRefresh.textContent = '';
+  }
+}
+
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>

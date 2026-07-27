@@ -3,8 +3,6 @@ import { evaluateMirrors, loadConfig, rememberMirror, urlOnMirror } from './mirr
 
 initLangSwitch();
 
-document.getElementById('year').textContent = new Date().getFullYear();
-
 /* Mobile nav */
 const navToggle = document.getElementById('navToggle');
 const navLinks = document.getElementById('navLinks');
