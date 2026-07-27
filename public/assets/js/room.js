@@ -174,8 +174,7 @@ const player = {
     else {
       el.video.play().catch((err) => {
         if (err.name === 'NotAllowedError') {
-          el.playOverlay.classList.remove('hidden');
-          el.playOverlay.style.display = 'flex';
+          showPlayGate();
         }
       });
     }
@@ -243,7 +242,18 @@ function playDirect(source, playback) {
   }
 
   el.video.controls = state.isHost;
-  if (playback) setTimeout(() => applyPlaybackState(playback), 400);
+  if (playback && playback.playing) {
+    setTimeout(() => {
+      applyPlaybackState(playback);
+      // If the video hasn't actually started after sync (autoplay blocked),
+      // show the play gate so the user can tap to start.
+      if (!isPlaying()) showPlayGate();
+    }, 400);
+  } else if (playback) {
+    setTimeout(() => applyPlaybackState(playback), 400);
+  } else {
+    showPlayGate();
+  }
 }
 
 /** Stream a magnet/torrent peer-to-peer, straight into the <video> element. */
@@ -530,6 +540,167 @@ function connect(name) {
 }
 
 /* ------------------------------------------------------------------ */
+/* MX Player-style touch gestures on video element                      */
+/* ------------------------------------------------------------------ */
+
+// Brightness (CSS filter) / volume / seek / double-tap seek
+(function initTouchGestures() {
+  const video = el.video;
+  const shell = el.shell;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  let lastTapTime = 0;
+  let lastTapX = 0;
+  let gestureActive = false;
+  let gestureType = null; // 'brightness' | 'volume' | 'seek'
+  let startBrightness = 1;
+  let startVolume = 0;
+  let startSeekTime = 0;
+  let currentDx = 0;
+  let currentDy = 0;
+
+  const DOUBLE_TAP_MS = 300;
+  const DOUBLE_TAP_SEEK = 10; // seconds
+
+  // HUD overlay for showing brightness/volume/seek feedback
+  const hud = document.createElement('div');
+  hud.className = 'gesture-hud';
+  hud.innerHTML = '<div class="gesture-hud__icon"></div><div class="gesture-hud__bar"><div class="gesture-hud__fill"></div></div><div class="gesture-hud__label"></div>';
+  shell.appendChild(hud);
+
+  const hudIcon = hud.querySelector('.gesture-hud__icon');
+  const hudFill = hud.querySelector('.gesture-hud__fill');
+  const hudLabel = hud.querySelector('.gesture-hud__label');
+
+  function showHud(icon, pct, label) {
+    hudIcon.textContent = icon;
+    hudFill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    hudLabel.textContent = label;
+    hud.classList.add('is-visible');
+  }
+
+  function hideHud() {
+    hud.classList.remove('is-visible');
+  }
+
+  // Double-tap detection
+  function handleDoubleTap(x) {
+    if (!state.source) return;
+    const half = shell.offsetWidth / 2;
+    const delta = x < half ? -DOUBLE_TAP_SEEK : DOUBLE_TAP_SEEK;
+    const newTime = Math.max(0, Math.min(player.currentTime() + delta, video.duration || Infinity));
+    if (state.isHost) {
+      player.seek(newTime);
+      emitControl(isPlaying(), newTime, 'double-tap');
+    } else {
+      // Viewers still seek locally for a smoother feel
+      player.seek(newTime);
+    }
+    const label = delta < 0 ? `⏪ ${Math.abs(delta)}s` : `⏩ ${Math.abs(delta)}s`;
+    showHud(delta < 0 ? '⏪' : '⏩', 50, label);
+    setTimeout(hideHud, 600);
+  }
+
+  shell.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    touchStartTime = Date.now();
+    currentDx = 0;
+    currentDy = 0;
+    gestureActive = false;
+    gestureType = null;
+
+    // Double-tap check
+    const dt = Date.now() - lastTapTime;
+    if (dt < DOUBLE_TAP_MS && Math.abs(t.clientX - lastTapX) < 50) {
+      e.preventDefault();
+      handleDoubleTap(t.clientX);
+      lastTapTime = 0;
+      return;
+    }
+    lastTapTime = Date.now();
+    lastTapX = t.clientX;
+
+    startBrightness = parseFloat(shell.style.filter?.replace(/brightness\(([\d.]+)\)/, '$1') || '1');
+    startVolume = video.volume;
+    startSeekTime = player.currentTime();
+  }, { passive: false });
+
+  shell.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+    currentDx = dx;
+    currentDy = dy;
+
+    // Determine gesture type after threshold
+    if (!gestureActive) {
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      if (absDx < 10 && absDy < 10) return;
+      gestureActive = true;
+      const half = shell.offsetWidth / 2;
+      if (absDy > absDx) {
+        gestureType = t.clientX < half ? 'brightness' : 'volume';
+      } else {
+        gestureType = 'seek';
+      }
+    }
+
+    e.preventDefault();
+
+    if (gestureType === 'brightness') {
+      // Vertical drag on left half → brightness (0.1 – 2.0)
+      const deltaPct = -dy / shell.offsetHeight;
+      const newBright = Math.max(0.1, Math.min(2.0, startBrightness + deltaPct * 1.5));
+      shell.style.filter = `brightness(${newBright.toFixed(2)})`;
+      const pct = ((newBright - 0.1) / 1.9) * 100;
+      showHud('☀️', pct, `${Math.round(newBright * 100)}%`);
+    } else if (gestureType === 'volume') {
+      // Vertical drag on right half → volume (0 – 1)
+      const deltaPct = -dy / shell.offsetHeight;
+      const newVol = Math.max(0, Math.min(1, startVolume + deltaPct * 1.5));
+      video.volume = newVol;
+      if (newVol === 0) video.muted = true;
+      else video.muted = false;
+      const pct = newVol * 100;
+      showHud('🔊', pct, `${Math.round(pct)}%`);
+    } else if (gestureType === 'seek' && state.source) {
+      // Horizontal drag → seek
+      const seekDelta = (dx / shell.offsetWidth) * 60; // 60s across full width
+      const projected = Math.max(0, Math.min(startSeekTime + seekDelta, video.duration || Infinity));
+      const pct = video.duration ? (projected / video.duration) * 100 : 50;
+      const sign = seekDelta >= 0 ? '+' : '';
+      showHud(seekDelta >= 0 ? '⏩' : '⏪', pct, `${sign}${Math.round(seekDelta)}s`);
+    }
+  }, { passive: false });
+
+  shell.addEventListener('touchend', () => {
+    if (!gestureActive) return;
+
+    if (gestureType === 'seek' && state.source) {
+      const seekDelta = (currentDx / shell.offsetWidth) * 60;
+      const finalTime = Math.max(0, Math.min(startSeekTime + seekDelta, video.duration || Infinity));
+      if (state.isHost) {
+        player.seek(finalTime);
+        emitControl(isPlaying(), finalTime, 'gesture-seek');
+      } else {
+        player.seek(finalTime);
+      }
+    }
+
+    gestureActive = false;
+    gestureType = null;
+    setTimeout(hideHud, 500);
+  });
+})();
+
+/* ------------------------------------------------------------------ */
 /* Event handlers                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -733,9 +904,16 @@ el.proxyToggle.addEventListener('change', () => {
   el.proxyWrap.classList.toggle('is-on', el.proxyToggle.checked);
 });
 
-el.playOverlay.addEventListener('click', () => {
+function showPlayGate() {
+  el.playOverlay.classList.remove('hidden');
+}
+
+function hidePlayGate() {
   el.playOverlay.classList.add('hidden');
-  el.playOverlay.style.display = '';
+}
+
+el.playOverlay.addEventListener('click', () => {
+  hidePlayGate();
   el.video.play().catch((err) => {
     if (err.name === 'NotAllowedError') {
       el.video.muted = true;

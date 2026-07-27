@@ -1,5 +1,7 @@
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 import express from 'express';
@@ -95,6 +97,69 @@ app.get('/healthz', (_req, res) => res.json({
 
 app.get('/api/stats', (_req, res) => res.json(stats()));
 
+/** System info for the graphical status page. */
+app.get('/api/system', (_req, res) => {
+  const cpus = os.cpus();
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const loadAvg = os.loadavg();
+
+  // Try to detect ffmpeg / yt-dlp versions (may not be installed)
+  let ffmpegVer = null;
+  let ytdlpVer = null;
+  try { ffmpegVer = execSync('ffmpeg -version 2>/dev/null', { timeout: 3000 }).toString().split('\n')[0].trim(); } catch {}
+  try { ytdlpVer = execSync('yt-dlp --version 2>/dev/null', { timeout: 3000 }).toString().trim(); } catch {}
+
+  const healthPct = Math.round(
+    ((1 - loadAvg[0] / cpus.length) * 0.4 +
+     (freeMem / totalMem) * 0.6) * 100
+  );
+
+  res.json({
+    ok: true,
+    uptime: process.uptime(),
+    uptimeHuman: formatDuration(process.uptime()),
+    healthPct,
+    rooms: stats().rooms,
+    users: stats().users,
+    cpu: {
+      model: cpus[0]?.model || 'unknown',
+      cores: cpus.length,
+      loadAvg: loadAvg.map((v) => v.toFixed(2)),
+    },
+    memory: {
+      total: totalMem,
+      free: freeMem,
+      used: totalMem - freeMem,
+      totalHuman: fmtBytes(totalMem),
+      freeHuman: fmtBytes(freeMem),
+      usedHuman: fmtBytes(totalMem - freeMem),
+    },
+    nodeVersion: process.version,
+    ffmpeg: ffmpegVer,
+    ytdlp: ytdlpVer,
+  });
+});
+
+function formatDuration(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function fmtBytes(bytes) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i += 1; }
+  return `${n.toFixed(1)} ${units[i]}`;
+}
+
 /** Mirrors + soft country hint, consumed by the client on page load. */
 app.get('/api/config', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
@@ -183,6 +248,7 @@ app.get('/api/media/transcode', async (req, res) => {
 });
 
 app.get('/room/:id', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'room.html')));
+app.get('/status', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'status.html')));
 app.get('/', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
 
 app.use((_req, res) => res.status(404).sendFile(path.join(PUBLIC_DIR, '404.html')));
