@@ -8,6 +8,9 @@ import helmet from 'helmet';
 import { Server as SocketServer } from 'socket.io';
 
 import { detectSource, probeDirect, proxyStream } from './media.js';
+import { transcodeStream } from './transcode.js';
+import { handleYoutubeCookies } from './youtube.js';
+import { handleUpdater } from './updater.js';
 import { clientConfig, listDomains, requestHost } from './domains.js';
 import {
   AVATAR_COLORS,
@@ -59,6 +62,9 @@ app.use(
 );
 app.use(compression());
 app.use(express.json({ limit: '32kb' }));
+
+handleYoutubeCookies(app);
+handleUpdater(app);
 
 app.use(
   express.static(PUBLIC_DIR, {
@@ -167,6 +173,13 @@ app.get('/api/media/proxy', async (req, res) => {
   const url = String(req.query.url || '');
   if (!url) return res.status(400).json({ error: 'missing_url' });
   return proxyStream(url, req, res);
+});
+
+app.get('/api/media/transcode', async (req, res) => {
+  const url = String(req.query.url || '');
+  const mode = String(req.query.mode || 'remux');
+  if (!url) return res.status(400).json({ error: 'missing_url' });
+  return transcodeStream(url, req, res, mode);
 });
 
 app.get('/room/:id', (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'room.html')));

@@ -15,6 +15,10 @@
 <link rel="stylesheet" href="/assets/css/style.css" />
 </head>
 <body>
+<div id="updateBar" style="display:none;background:#ff9800;color:#000;text-align:center;padding:10px;font-weight:bold;z-index:9999;position:relative;">
+  <span data-i18n="update.available">بروزرسانی جدید در دسترس است!</span>
+  <button id="updateBtn" style="margin-left:10px;padding:5px 10px;background:#000;color:#fff;border:none;border-radius:4px;cursor:pointer;">به‌روزرسانی کن</button>
+</div>
 
 <header class="site-header">
   <div class="container nav">
@@ -220,5 +224,6 @@
 <div class="toast" id="toast"></div>
 
 <script type="module" src="/assets/js/home.js"></script>
+<script src="/assets/js/updater-client.js"></script>
 </body>
 </html>
