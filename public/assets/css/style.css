@@ -1015,6 +1015,311 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
   transform: translate(-50%, -50%);
 }
 
+/* =========================================================
+   Call dock — phase 2
+   Normal:     a slim collapsible strip in a corner of the player.
+   Fullscreen: a draggable PiP pod floating over the movie.
+   The rule everywhere: never sit in front of the picture.
+   ========================================================= */
+
+.callpod {
+  position: absolute;
+  inset-inline-end: 12px;
+  bottom: 12px;
+  z-index: 40;
+  width: min(280px, 46%);
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(8, 10, 18, 0.72);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(14px) saturate(1.2);
+  box-shadow: 0 14px 40px -18px rgba(0, 0, 0, 0.9);
+  /* Never fight the player's own controls for pointer events. */
+  transition: opacity 0.25s, transform 0.25s, box-shadow 0.25s;
+  opacity: 0.94;
+}
+
+.callpod:hover { opacity: 1; }
+.callpod[hidden] { display: none; }
+
+/* A calm glow while the film is ducked, so the reason is obvious. */
+.callpod.is-ducking { box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.5), 0 14px 40px -18px rgba(0, 0, 0, 0.9); }
+
+.callpod__grip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.callpod__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--ok);
+  box-shadow: 0 0 8px var(--ok);
+  flex: none;
+}
+
+.callpod.is-ducking .callpod__dot { background: var(--brand-2); box-shadow: 0 0 10px var(--brand-2); }
+.callpod__title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.callpod__collapse {
+  margin-inline-start: auto;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: transform 0.2s, color 0.2s;
+}
+
+.callpod__collapse:hover { color: var(--text); }
+.callpod.is-collapsed .callpod__collapse { transform: rotate(180deg); }
+.callpod.is-collapsed .callpod__tiles,
+.callpod.is-collapsed .callpod__bar,
+.callpod.is-collapsed .duck-panel { display: none; }
+
+.callpod__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  padding: 4px;
+}
+
+.callpod.is-solo .callpod__tiles { grid-template-columns: 1fr; }
+
+/* Voice-only: no need for big empty boxes, shrink to avatar rows. */
+.callpod.is-audio .callpod__tiles { grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); }
+.callpod.is-audio .ctile { aspect-ratio: 1 / 1; }
+
+.ctile {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #0a0d17;
+  display: grid;
+  place-items: center;
+}
+
+/* Beat `.player-shell video { width:100%; height:100% }` for call tiles. */
+.player-shell .ctile video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #0a0d17;
+  border-radius: inherit;
+}
+
+.ctile--self video { transform: scaleX(-1); } /* mirror your own preview */
+
+.ctile__avatar {
+  display: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #06070d;
+  background: var(--brand);
+  z-index: 2;
+}
+
+/* Camera off / voice mode → show the avatar instead of a black rectangle. */
+.callpod.is-audio .ctile video,
+.ctile.is-camoff video { display: none; }
+.callpod.is-audio .ctile__avatar,
+.ctile.is-camoff .ctile__avatar { display: grid; }
+
+.ctile__name {
+  position: absolute;
+  inset-inline-start: 5px;
+  bottom: 4px;
+  max-width: 78%;
+  font-size: 0.66rem;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 3;
+}
+
+.ctile__status {
+  position: absolute;
+  inset-inline: 4px;
+  top: 4px;
+  font-size: 0.6rem;
+  color: var(--warn);
+  text-align: center;
+  z-index: 3;
+}
+
+.ctile__badges {
+  position: absolute;
+  inset-inline-end: 4px;
+  bottom: 4px;
+  font-size: 0.6rem;
+  z-index: 3;
+  display: none;
+}
+
+.ctile.is-muted .ctile__badges { display: block; }
+.ctile.is-stalled { outline: 1px solid var(--warn); outline-offset: -1px; }
+
+/* Still negotiating: dim it so nobody stares at a frozen frame. */
+.ctile[data-state='connecting'],
+.ctile[data-state='new'] { opacity: 0.55; }
+.ctile[data-state='failed'] { opacity: 0.4; outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.callpod__bar {
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-top: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cbtn {
+  flex: 1;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.12s, opacity 0.18s;
+}
+
+.cbtn:hover { background: rgba(255, 255, 255, 0.12); }
+.cbtn:active { transform: scale(0.94); }
+.cbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+.cbtn.is-off { background: rgba(255, 77, 141, 0.22); border-color: rgba(255, 77, 141, 0.45); }
+.cbtn--hang { background: rgba(255, 77, 141, 0.16); border-color: rgba(255, 77, 141, 0.35); }
+.cbtn--hang:hover { background: rgba(255, 77, 141, 0.32); }
+.cbtn--mode.is-audio { background: rgba(33, 212, 253, 0.16); border-color: rgba(33, 212, 253, 0.4); }
+
+/* --- Picture-in-picture (fullscreen) ----------------------------- */
+
+.callpod.is-pip {
+  inset-inline-end: auto;
+  bottom: auto;
+  width: min(230px, 34vw);
+  cursor: grab;
+  opacity: 0.9;
+}
+
+.callpod.is-pip .callpod__grip { cursor: grab; }
+.callpod.is-pip.is-dragging { cursor: grabbing; opacity: 1; transition: none; }
+.callpod.is-pip.is-dragging .callpod__grip { cursor: grabbing; }
+
+/* Double-tap the grip → compact circle, the least intrusive shape. */
+.callpod.is-pip.is-round {
+  width: 108px;
+  border-radius: 50%;
+}
+
+.callpod.is-pip.is-round .callpod__grip,
+.callpod.is-pip.is-round .callpod__title,
+.callpod.is-pip.is-round .duck-panel { display: none; }
+
+.callpod.is-pip.is-round .callpod__tiles {
+  grid-template-columns: 1fr;
+  padding: 0;
+  gap: 0;
+}
+
+.callpod.is-pip.is-round .ctile {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+}
+
+.callpod.is-pip.is-round .ctile:not(:first-child) { display: none; }
+
+.callpod.is-pip.is-round .callpod__bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border: 0;
+  padding: 3px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.callpod.is-pip.is-round:hover .callpod__bar { opacity: 1; }
+
+/* --- Ducking settings panel -------------------------------------- */
+
+.duck-panel {
+  border-top: 1px solid var(--border);
+  padding: 9px 10px 10px;
+  background: rgba(5, 6, 12, 0.9);
+  font-size: 0.74rem;
+}
+
+.duck-panel[hidden] { display: none; }
+
+.duck-panel__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 0.75rem;
+}
+
+.duck-panel__head .probe__close { margin-inline-start: auto; }
+
+.duck-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.duck-row--slider span { flex: 0 0 auto; }
+.duck-row input[type='range'] { flex: 1; min-width: 0; accent-color: var(--brand); }
+.duck-row b { flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; font-size: 0.7rem; }
+
+.duck-panel__state {
+  margin: 7px 0 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.callpod.is-ducking .duck-panel__state { color: var(--ok); }
+
+/* --- Sidebar call entry point ------------------------------------ */
+
+.call-start { margin-top: 10px; }
+.call-start.is-active { background: rgba(255, 77, 141, 0.18); border-color: rgba(255, 77, 141, 0.4); }
+.call-hint { margin: 6px 0 0; font-size: 0.72rem; color: var(--muted); line-height: 1.6; }
+.call-hint.is-full { color: var(--warn); }
+
+/* Fullscreened shell must fill the screen, not keep a 16:9 letterbox. */
+.player-shell:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; }
+.player-shell:-webkit-full-screen { aspect-ratio: auto; width: 100vw; height: 100vh; }
+
 .hidden { display: none !important; }
 
 /* Gesture HUD — shows brightness/volume/seek feedback during touch gestures */
@@ -1102,6 +1407,26 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
   .player-bar .input { flex: 1 1 150px; font-size: 0.85rem; padding: 9px 10px; }
   .player-bar .btn { min-height: 44px; }
   .player-bar .proxy-toggle { min-height: 44px; display: flex; align-items: center; }
+
+  /* Call dock on phones: narrower, but controls stay ≥44px touch targets. */
+  .callpod { width: min(200px, 52%); inset-inline-end: 8px; bottom: 8px; border-radius: 12px; }
+  .callpod__grip { padding: 8px 9px; font-size: 0.7rem; }
+  .callpod__collapse { min-width: 32px; min-height: 32px; }
+  .cbtn { min-height: 44px; font-size: 0.9rem; }
+  .ctile__name { font-size: 0.6rem; }
+  .callpod.is-pip { width: min(150px, 40vw); }
+  .callpod.is-pip.is-round { width: 88px; }
+  /* On a phone the ducking sliders need room; float the panel over the pod. */
+  .duck-panel {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 100%;
+    margin-bottom: 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
+    background: rgba(5, 6, 12, 0.97);
+    width: max(220px, 100%);
+  }
 
   .side-card { padding: 10px; }
   .chat { height: min(50vh, 400px); }

@@ -77,6 +77,50 @@
         <div class="torrent-hud__bar"><span id="torrentProgress"></span></div>
         <div class="torrent-hud__meta" id="torrentMeta"></div>
       </div>
+
+      <!-- Video/voice call dock.
+           Normal: a slim collapsible strip in the corner of the player.
+           Fullscreen: a draggable PiP pod floating over the video. -->
+      <div class="callpod" id="callPod" hidden>
+        <div class="callpod__grip" id="callGrip">
+          <span class="callpod__dot" aria-hidden="true"></span>
+          <span class="callpod__title"><span data-i18n="call.title">تماس</span> · <span id="callCount">0</span></span>
+          <button type="button" class="callpod__collapse" id="callCollapse" aria-expanded="true" data-i18n-aria="call.collapse" aria-label="جمع کردن">⌄</button>
+        </div>
+
+        <div class="callpod__tiles" id="callTiles"></div>
+
+        <div class="callpod__bar">
+          <button type="button" class="cbtn" id="callMic" data-i18n-aria="call.muteMic" aria-label="قطع میکروفون">🎤</button>
+          <button type="button" class="cbtn" id="callCam" data-i18n-aria="call.stopCam" aria-label="قطع دوربین">🎥</button>
+          <button type="button" class="cbtn cbtn--mode" id="callMode" data-i18n-aria="call.toAudio" aria-label="تبدیل به تماس صوتی">✕</button>
+          <button type="button" class="cbtn" id="callDuckBtn" data-i18n-aria="call.duckSettings" aria-label="تنظیمات کم شدن صدا">🎚️</button>
+          <button type="button" class="cbtn cbtn--hang" id="callHang" data-i18n-aria="call.leave" aria-label="خروج از تماس">📴</button>
+        </div>
+
+        <!-- Ducking settings -->
+        <div class="duck-panel" id="duckPanel" hidden>
+          <div class="duck-panel__head">
+            <strong data-i18n="call.duckTitle">کم شدن هوشمند صدای فیلم</strong>
+            <button type="button" class="probe__close" id="duckClose" aria-label="close">×</button>
+          </div>
+          <label class="duck-row">
+            <input type="checkbox" id="duckToggle" checked />
+            <span data-i18n="call.duckEnable">فعال</span>
+          </label>
+          <label class="duck-row duck-row--slider">
+            <span data-i18n="call.duckSense">حساسیت</span>
+            <input type="range" id="duckSense" min="10" max="140" step="5" />
+            <b id="duckSenseVal">0.060</b>
+          </label>
+          <label class="duck-row duck-row--slider">
+            <span data-i18n="call.duckDepth">شدت کم شدن</span>
+            <input type="range" id="duckDepth" min="0" max="90" step="5" />
+            <b id="duckDepthVal">25%</b>
+          </label>
+          <p class="duck-panel__state" id="duckState" data-i18n="call.duckIdle">صدای فیلم عادی است</p>
+        </div>
+      </div>
     </div>
 
     <div class="player-bar">
@@ -86,6 +130,9 @@
       <button class="btn btn--primary btn--sm" id="loadBtn" data-i18n="room.load">بارگذاری</button>
       <button class="btn btn--sm" id="fileBtn" data-i18n="room.pickFile">فایل محلی</button>
       <button class="btn btn--sm btn--ghost" id="syncBtn" data-i18n="room.sync">همگام‌سازی دوباره</button>
+      <!-- Fullscreens the whole player shell (not just <video>) so the call
+           pod stays visible on top of the movie. -->
+      <button class="btn btn--sm btn--ghost" id="fsBtn" data-i18n="room.fullscreen">تمام‌صفحه</button>
       <input type="file" id="fileInput" accept="video/*,.mkv,.avi" class="hidden" />
 
       <label class="proxy-toggle" id="proxyWrap" title="">
@@ -110,6 +157,8 @@
     <div class="panel side-card">
       <h4><span data-i18n="room.members">اعضای اتاق</span> · <span id="memberCount">0</span></h4>
       <div class="members" id="members"></div>
+      <button class="btn btn--sm btn--block call-start" id="callStartBtn" data-i18n="call.start">تماس تصویری</button>
+      <p class="call-hint" id="callHint" data-i18n="call.hint">تا ۴ نفر — صدای فیلم موقع حرف زدن خودکار کم می‌شود.</p>
     </div>
 
     <div class="panel">

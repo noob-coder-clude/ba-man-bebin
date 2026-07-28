@@ -1,4 +1,5 @@
 import { initLangSwitch, t } from './i18n.js';
+import { initCall } from './call-ui.js';
 import {
   bestInviteLink,
   evaluateMirrors,
@@ -40,6 +41,7 @@ const el = {
   fileBtn: document.getElementById('fileBtn'),
   fileInput: document.getElementById('fileInput'),
   syncBtn: document.getElementById('syncBtn'),
+  fsBtn: document.getElementById('fsBtn'),
   members: document.getElementById('members'),
   memberCount: document.getElementById('memberCount'),
   chatList: document.getElementById('chatList'),
@@ -69,6 +71,7 @@ const state = {
   lastProbe: null, // report for the link currently in the input
   hls: null, // hls.js instance
   torrent: null, // { client, torrent } for magnet playback
+  call: null, // call controller (see call-ui.js), created after joining
 };
 
 let socket = null;
@@ -184,6 +187,62 @@ const player = {
     else el.video.pause();
   },
 };
+
+/* ------------------------------------------------------------------ */
+/* Fullscreen (whole shell, so the call pod floats over the movie)      */
+/* ------------------------------------------------------------------ */
+
+const isFullscreen = () => Boolean(
+  document.fullscreenElement === el.shell || document.webkitFullscreenElement === el.shell,
+);
+
+function toggleFullscreen() {
+  if (isFullscreen()) {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    return;
+  }
+  const request = el.shell.requestFullscreen || el.shell.webkitRequestFullscreen;
+  // iOS Safari has no element fullscreen: fall back to the video's own,
+  // which loses the overlay but is better than a dead button.
+  if (request) request.call(el.shell).catch(() => {});
+  else el.video.webkitEnterFullscreen?.();
+}
+
+el.fsBtn?.addEventListener('click', toggleFullscreen);
+
+function syncFullscreenClass() {
+  el.shell.classList.toggle('is-fullscreen', isFullscreen());
+}
+document.addEventListener('fullscreenchange', syncFullscreenClass);
+document.addEventListener('webkitfullscreenchange', syncFullscreenClass);
+
+/* ------------------------------------------------------------------ */
+/* Ducking sink: hand the ducker whatever is currently playing          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The film's audio output differs per engine:
+ *   · <video> (direct/HLS/torrent/file) → real GainNode in the Web Audio graph
+ *   · YouTube iframe                    → only setVolume() is reachable, so
+ *                                         the ducker drives that instead.
+ */
+function attachDuckSink(ducker) {
+  if (state.source?.kind === 'youtube') {
+    ducker.attachExternal((gain) => {
+      const base = state.ytBaseVolume ?? 100;
+      state.ytPlayer?.setVolume?.(Math.round(base * gain));
+    });
+    // Remember the user's own level so ducking is relative to it.
+    state.ytBaseVolume = state.ytPlayer?.getVolume?.() ?? 100;
+    return;
+  }
+  ducker.attachElement(el.video);
+}
+
+// Keep "100%" in sync when the viewer moves the volume themselves.
+el.video.addEventListener('volumechange', () => {
+  state.call?.ducker?.noteUserVolume(el.video.volume);
+});
 
 /* ------------------------------------------------------------------ */
 /* Source loading: youtube · direct (mp4/HLS, optional proxy) · torrent */
@@ -326,6 +385,9 @@ async function playTorrent(source, playback) {
 function applySource(source, playback) {
   teardownPlayback();
   state.source = source;
+  // The audio graph has to follow the source: YouTube → mp4 changes which
+  // node the ducker bends. Give the engine a moment to attach its media.
+  setTimeout(() => state.call?.refreshDuckSink?.(), 800);
   if (!source) return;
 
   if (source.value) lastLoadedUrl = source.value;
@@ -481,6 +543,16 @@ function connect(name) {
   // eslint-disable-next-line no-undef
   socket = io({ transports: ['websocket', 'polling'] });
 
+  // Video/voice calls + smart ducking. Created once per socket, before the
+  // join ack, so the call:* listeners are already in place.
+  state.call = initCall({
+    socket,
+    shell: el.shell,
+    toast,
+    attachDuckSink,
+    isFullscreen,
+  });
+
   socket.on('connect', () => {
     socket.emit('room:join', { roomId, name }, (res) => {
       if (res?.error) {
@@ -492,6 +564,8 @@ function connect(name) {
       renderMembers(res.room.members, res.room.hostId);
       el.chatList.innerHTML = '';
       res.room.messages.forEach(addMessage);
+      // A call may already be running in this room — show how full it is.
+      state.call?.syncRoster?.(res.room.call || []);
       if (res.room.source) applySource(res.room.source, res.room.state);
     });
   });
@@ -535,7 +609,16 @@ function connect(name) {
   socket.on('chat:message', addMessage);
   socket.on('chat:reaction', ({ emoji }) => floatEmoji(emoji));
 
-  socket.on('disconnect', () => toast(t('room.disconnected')));
+  socket.on('disconnect', () => {
+    toast(t('room.disconnected'));
+    // Our socket id changes on reconnect, which would invalidate every
+    // offer/answer pairing. Tear the call down cleanly instead of leaving
+    // half-dead RTCPeerConnections behind.
+    if (state.call?.joined) {
+      state.call.end();
+      toast(`⚠️ ${t('call.dropped')}`);
+    }
+  });
   socket.io.on('reconnect', () => toast(t('room.reconnected')));
 }
 
