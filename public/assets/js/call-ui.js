@@ -270,6 +270,7 @@ export function initCall({ socket, shell, toast, attachDuckSink, isFullscreen })
         else toast(`⚠️ ${t('call.failed')}`);
         return;
       }
+      socket.emit('call:invite');
       if (!res.relayAvailable && (res.peers?.length || 0) > 0) {
         // Not an error yet — just so the 10s warning later makes sense.
         console.info('[call] STUN only, no TURN configured');
@@ -540,5 +541,6 @@ export function initCall({ socket, shell, toast, attachDuckSink, isFullscreen })
     applyLayout,
     end: endCall,
     get joined() { return engine.joined; },
+    join: startCall,
   };
 }

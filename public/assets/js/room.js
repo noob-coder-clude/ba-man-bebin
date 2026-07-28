@@ -22,6 +22,7 @@ const el = {
   empty: document.getElementById('playerEmpty'),
   ytHost: document.getElementById('ytHost'),
   video: document.getElementById('localVideo'),
+  media: document.getElementById('mediaPlayer'),
   playOverlay: document.getElementById('playOverlay'),
   overlayPlayBtn: document.getElementById('overlayPlayBtn'),
   sourceInput: document.getElementById('sourceInput'),
@@ -117,6 +118,7 @@ window.onYouTubeIframeAPIReady = () => {
 
 function createYtPlayer(videoId, playback) {
   el.empty.classList.add('hidden');
+  el.media.classList.add('hidden');
   el.video.classList.add('hidden');
   el.ytHost.classList.remove('hidden');
 
@@ -270,7 +272,28 @@ function teardownPlayback() {
 function showVideoElement() {
   el.empty.classList.add('hidden');
   el.ytHost.classList.add('hidden');
-  el.video.classList.remove('hidden');
+  el.media.classList.remove('hidden');
+}
+
+// Resume points are local-only: source URLs are the natural, private key.
+const resumeKey = (url) => `bmb.resume.${url}`;
+let resumeTimer;
+function restoreResume(url) {
+  if (!url) return;
+  const saved = Number(localStorage.getItem(resumeKey(url)) || 0);
+  if (saved < 15) return;
+  const minutes = Math.floor(saved / 60);
+  if (window.confirm(`از دقیقه ${minutes} ادامه بدم؟\nContinue from minute ${minutes}?`)) {
+    player.seek(saved);
+  }
+}
+function startResumeSaving(url) {
+  clearInterval(resumeTimer);
+  if (!url) return;
+  resumeTimer = setInterval(() => {
+    const time = player.currentTime();
+    if (time > 15) localStorage.setItem(resumeKey(url), String(Math.floor(time)));
+  }, 5000);
 }
 
 /** Play a direct URL (mp4/webm/m3u8), optionally routed through our server. */
@@ -391,11 +414,13 @@ function applySource(source, playback) {
   if (!source) return;
 
   if (source.value) lastLoadedUrl = source.value;
+  if (!playback) setTimeout(() => restoreResume(source.value), 700);
 
   updateKindBadge(source.kind);
 
+  startResumeSaving(source.value);
   if (source.kind === 'youtube') {
-    el.video.classList.add('hidden');
+    el.media.classList.add('hidden');
     if (!state.ytReady) {
       state.pendingSource = { source, playback };
       return;
@@ -607,6 +632,15 @@ function connect(name) {
   });
 
   socket.on('chat:message', addMessage);
+  socket.on('call:invite', ({ name, count }) => {
+    const card = document.createElement('div');
+    card.className = 'msg msg--system call-invite';
+    card.innerHTML = `<strong>📞 ${escapeHtml(name)} می‌خواهد تماس بگیرد</strong><br><span>${count || 1} نفر در تماس‌اند</span> `;
+    const join = document.createElement('button'); join.textContent = 'پیوستن'; join.className = 'btn';
+    join.style.minHeight = '44px'; join.onclick = () => { state.call?.join?.(); join.disabled = true; join.textContent = 'در تماس هستی'; };
+    const reject = document.createElement('button'); reject.textContent = 'رد کردن'; reject.className = 'btn'; reject.style.minHeight = '44px'; reject.onclick = () => card.remove();
+    card.append(join, reject); el.chatList.appendChild(card); el.chatList.scrollTop = el.chatList.scrollHeight;
+  });
   socket.on('chat:reaction', ({ emoji }) => floatEmoji(emoji));
 
   socket.on('disconnect', () => {
