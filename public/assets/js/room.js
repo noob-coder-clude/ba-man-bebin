@@ -21,7 +21,7 @@ const el = {
   shell: document.getElementById('playerShell'),
   empty: document.getElementById('playerEmpty'),
   ytHost: document.getElementById('ytHost'),
-  video: document.getElementById('localVideo'),
+  mediaPlayer: document.getElementById('mediaPlayer'),
   playOverlay: document.getElementById('playOverlay'),
   overlayPlayBtn: document.getElementById('overlayPlayBtn'),
   sourceInput: document.getElementById('sourceInput'),
@@ -117,7 +117,7 @@ window.onYouTubeIframeAPIReady = () => {
 
 function createYtPlayer(videoId, playback) {
   el.empty.classList.add('hidden');
-  el.video.classList.add('hidden');
+  el.mediaPlayer.classList.add('hidden');
   el.ytHost.classList.remove('hidden');
 
   if (state.ytPlayer?.loadVideoById) {
@@ -166,16 +166,16 @@ const player = {
   },
   currentTime() {
     if (this.kind === 'youtube') return state.ytPlayer?.getCurrentTime?.() ?? 0;
-    return el.video.currentTime || 0;
+    return el.mediaPlayer.currentTime || 0;
   },
   seek(time) {
     if (this.kind === 'youtube') state.ytPlayer?.seekTo?.(time, true);
-    else el.video.currentTime = time;
+    else el.mediaPlayer.currentTime = time;
   },
   play() {
     if (this.kind === 'youtube') state.ytPlayer?.playVideo?.();
     else {
-      el.video.play().catch((err) => {
+      el.mediaPlayer.play().catch((err) => {
         if (err.name === 'NotAllowedError') {
           showPlayGate();
         }
@@ -184,7 +184,7 @@ const player = {
   },
   pause() {
     if (this.kind === 'youtube') state.ytPlayer?.pauseVideo?.();
-    else el.video.pause();
+    else el.mediaPlayer.pause();
   },
 };
 
@@ -205,10 +205,31 @@ function toggleFullscreen() {
   // iOS Safari has no element fullscreen: fall back to the video's own,
   // which loses the overlay but is better than a dead button.
   if (request) request.call(el.shell).catch(() => {});
-  else el.video.webkitEnterFullscreen?.();
+  else {
+    const video = getInternalVideo();
+    video?.webkitEnterFullscreen?.();
+  }
 }
 
 el.fsBtn?.addEventListener('click', toggleFullscreen);
+
+['media-enter-fullscreen-request', 'media-exit-fullscreen-request', 'fullscreen-request'].forEach((evt) => {
+  el.mediaPlayer.addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFullscreen();
+  });
+});
+
+el.mediaPlayer.addEventListener('fullscreen-change', (e) => {
+  if (e.detail && document.fullscreenElement === el.mediaPlayer) {
+    (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
+    setTimeout(() => {
+      const request = el.shell.requestFullscreen || el.shell.webkitRequestFullscreen;
+      request?.call(el.shell).catch(() => {});
+    }, 50);
+  }
+});
 
 function syncFullscreenClass() {
   el.shell.classList.toggle('is-fullscreen', isFullscreen());
@@ -236,12 +257,36 @@ function attachDuckSink(ducker) {
     state.ytBaseVolume = state.ytPlayer?.getVolume?.() ?? 100;
     return;
   }
-  ducker.attachElement(el.video);
+  const video = getInternalVideo();
+  if (video) {
+    ducker.attachElement(video);
+    if (!video._volTracked) {
+      video._volTracked = true;
+      video.addEventListener('volumechange', () => {
+        state.call?.ducker?.noteUserVolume(video.volume);
+      });
+    }
+  }
 }
 
 // Keep "100%" in sync when the viewer moves the volume themselves.
-el.video.addEventListener('volumechange', () => {
-  state.call?.ducker?.noteUserVolume(el.video.volume);
+el.mediaPlayer.addEventListener('volume-change', () => {
+  const video = getInternalVideo();
+  const vol = video ? video.volume : el.mediaPlayer.volume;
+  state.call?.ducker?.noteUserVolume(vol);
+});
+
+el.mediaPlayer.addEventListener('provider-change', (event) => {
+  const provider = event.detail;
+  if (provider && state.source?.kind !== 'youtube') {
+    state.call?.refreshDuckSink?.();
+  }
+});
+
+el.mediaPlayer.addEventListener('can-play', () => {
+  if (state.source?.kind !== 'youtube') {
+    state.call?.refreshDuckSink?.();
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -252,10 +297,6 @@ const proxied = (url) => `/api/media/proxy?url=${encodeURIComponent(url)}`;
 
 /** Tear down whatever engine is currently running before switching source. */
 function teardownPlayback() {
-  if (state.hls) {
-    state.hls.destroy();
-    state.hls = null;
-  }
   if (state.torrent) {
     try {
       state.torrent.client.destroy();
@@ -263,14 +304,13 @@ function teardownPlayback() {
     state.torrent = null;
   }
   el.torrentHud.hidden = true;
-  el.video.removeAttribute('src');
-  el.video.load?.();
+  el.mediaPlayer.src = '';
 }
 
 function showVideoElement() {
   el.empty.classList.add('hidden');
   el.ytHost.classList.add('hidden');
-  el.video.classList.remove('hidden');
+  el.mediaPlayer.classList.remove('hidden');
 }
 
 // Resume points are local-only: source URLs are the natural, private key.
@@ -303,25 +343,12 @@ function playDirect(source, playback) {
   const isHls = source.hls || /\.m3u8(\?|#|$)/i.test(raw);
 
   if (isHls) {
-    // Safari plays HLS natively; everyone else needs hls.js.
-    if (el.video.canPlayType('application/vnd.apple.mpegurl')) {
-      el.video.src = url;
-    } else if (window.Hls?.isSupported()) {
-      state.hls = new window.Hls({ enableWorker: true, lowLatencyMode: false });
-      state.hls.loadSource(url);
-      state.hls.attachMedia(el.video);
-      state.hls.on(window.Hls.Events.ERROR, (_e, data) => {
-        if (data?.fatal) toast(`⚠️ ${t('probe.failTitle')}`);
-      });
-    } else {
-      toast(`⚠️ ${t('probe.container')}`);
-      return;
-    }
+    el.mediaPlayer.src = { src: url, type: 'application/x-mpegurl' };
   } else {
-    el.video.src = url;
+    el.mediaPlayer.src = url;
   }
 
-  el.video.controls = state.isHost;
+  el.mediaPlayer.controls = state.isHost;
   if (playback && playback.playing) {
     setTimeout(() => {
       applyPlaybackState(playback);
@@ -360,7 +387,7 @@ async function playTorrent(source, playback) {
     el.torrentMeta.textContent = t('torrent.failed');
   });
 
-  client.add(source.value, (torrent) => {
+  client.add(source.value, async (torrent) => {
     if (!state.torrent) return; // switched source while connecting
     state.torrent.torrent = torrent;
 
@@ -374,8 +401,21 @@ async function playTorrent(source, playback) {
       return;
     }
 
-    file.streamTo(el.video);
-    el.video.controls = state.isHost;
+    let video = getInternalVideo();
+    if (!video) {
+      el.mediaPlayer.src = { src: '', type: 'video/mp4' };
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      video = getInternalVideo();
+    }
+
+    if (!video) {
+      el.torrentMeta.textContent = t('torrent.noVideo');
+      toast(`⚠️ ${t('torrent.noVideo')}`);
+      return;
+    }
+
+    file.streamTo(video);
+    el.mediaPlayer.controls = state.isHost;
     if (playback) setTimeout(() => applyPlaybackState(playback), 1200);
 
     const fmt = (bytes) => {
@@ -457,9 +497,9 @@ function updateKindBadge(kind) {
 /** Align local playback with the authoritative server state. */
 function applyPlaybackState(playback) {
   if (!playback || !state.source) return;
-  if (state.source.kind === 'file' && !el.video.src) return;
+  if (state.source.kind === 'file' && !el.mediaPlayer.src) return;
   // Nothing to sync against until the media element has metadata.
-  if (['direct', 'torrent'].includes(state.source.kind) && el.video.readyState === 0) return;
+  if (['direct', 'torrent'].includes(state.source.kind) && !el.mediaPlayer.state.canPlay) return;
 
   state.suppress = true;
   const target = playback.time + (playback.playing ? (Date.now() - playback.serverTime) / 1000 : 0);
@@ -475,22 +515,27 @@ function isPlaying() {
     // 1 === YT.PlayerState.PLAYING (avoid touching YT before the API loads)
     return state.ytPlayer?.getPlayerState?.() === 1;
   }
-  // hls.js and torrent streams attach via MediaSource, so check readiness
-  // rather than the src attribute alone.
-  const hasMedia = Boolean(el.video.src || el.video.srcObject || el.video.readyState > 0);
-  return hasMedia && !el.video.paused;
+  const hasMedia = Boolean(el.mediaPlayer.src || el.mediaPlayer.state.canPlay);
+  return hasMedia && !el.mediaPlayer.paused;
 }
 
 function emitControl(playing, time, reason) {
   socket?.emit('player:control', { playing, time, reason, rate: 1 });
 }
 
-/* Local <video> events (host only) */
-['play', 'pause', 'seeked'].forEach((evt) => {
-  el.video.addEventListener(evt, () => {
+/* Local media-player events (host only) */
+['play', 'pause', 'seeked', 'playing'].forEach((evt) => {
+  el.mediaPlayer.addEventListener(evt, () => {
     if (!state.isHost || state.suppress) return;
-    emitControl(!el.video.paused, el.video.currentTime, evt);
+    emitControl(!el.mediaPlayer.paused, el.mediaPlayer.currentTime, evt);
   });
+});
+
+el.mediaPlayer.addEventListener('error', (e) => {
+  const detail = e.detail;
+  if (detail && detail.fatal) {
+    toast(`⚠️ ${t('probe.failTitle')}`);
+  }
 });
 
 /* ------------------------------------------------------------------ */
@@ -526,7 +571,7 @@ function setRole(isHost) {
   // Picking a local file is always allowed — it never leaves the browser,
   // and viewers need it to follow along when the host shares a file.
   el.fileBtn.disabled = false;
-  if (state.source?.kind !== 'file') el.video.controls = isHost;
+  if (state.source?.kind !== 'file') el.mediaPlayer.controls = isHost;
 }
 
 function addMessage(message) {
@@ -660,7 +705,7 @@ function connect(name) {
 
 // Brightness (CSS filter) / volume / seek / double-tap seek
 (function initTouchGestures() {
-  const video = el.video;
+  const mediaPlayer = el.mediaPlayer;
   const shell = el.shell;
 
   let touchStartX = 0;
@@ -700,12 +745,17 @@ function connect(name) {
     hud.classList.remove('is-visible');
   }
 
+  function getDuration() {
+    return mediaPlayer.state?.duration || mediaPlayer.duration || 0;
+  }
+
   // Double-tap detection
   function handleDoubleTap(x) {
     if (!state.source) return;
     const half = shell.offsetWidth / 2;
     const delta = x < half ? -DOUBLE_TAP_SEEK : DOUBLE_TAP_SEEK;
-    const newTime = Math.max(0, Math.min(player.currentTime() + delta, video.duration || Infinity));
+    const duration = getDuration();
+    const newTime = Math.max(0, Math.min(player.currentTime() + delta, duration || Infinity));
     if (state.isHost) {
       player.seek(newTime);
       emitControl(isPlaying(), newTime, 'double-tap');
@@ -721,6 +771,10 @@ function connect(name) {
   shell.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) return;
     const t = e.touches[0];
+    const target = e.target;
+    // Don't intercept gestures if touch is on any interactive Vidstack control (button, slider, menu, HUD, etc.)
+    if (target.closest('button, input, select, a, [role="slider"], [role="button"], [role="menuitem"], [role="menu"], .vds-slider, .vds-button, .vds-menu, .vds-time-slider, .vds-controls-group, .callpod, .play-gate__btn, .gesture-hud')) return;
+
     touchStartX = t.clientX;
     touchStartY = t.clientY;
     touchStartTime = Date.now();
@@ -741,7 +795,7 @@ function connect(name) {
     lastTapX = t.clientX;
 
     startBrightness = parseFloat(shell.style.filter?.replace(/brightness\(([\d.]+)\)/, '$1') || '1');
-    startVolume = video.volume;
+    startVolume = mediaPlayer.volume;
     startSeekTime = player.currentTime();
   }, { passive: false });
 
@@ -780,16 +834,17 @@ function connect(name) {
       // Vertical drag on right half → volume (0 – 1)
       const deltaPct = -dy / shell.offsetHeight;
       const newVol = Math.max(0, Math.min(1, startVolume + deltaPct * 1.5));
-      video.volume = newVol;
-      if (newVol === 0) video.muted = true;
-      else video.muted = false;
+      mediaPlayer.volume = newVol;
+      if (newVol === 0) mediaPlayer.muted = true;
+      else mediaPlayer.muted = false;
       const pct = newVol * 100;
       showHud('🔊', pct, `${Math.round(pct)}%`);
     } else if (gestureType === 'seek' && state.source) {
       // Horizontal drag → seek
+      const duration = getDuration();
       const seekDelta = (dx / shell.offsetWidth) * 60; // 60s across full width
-      const projected = Math.max(0, Math.min(startSeekTime + seekDelta, video.duration || Infinity));
-      const pct = video.duration ? (projected / video.duration) * 100 : 50;
+      const projected = Math.max(0, Math.min(startSeekTime + seekDelta, duration || Infinity));
+      const pct = duration ? (projected / duration) * 100 : 50;
       const sign = seekDelta >= 0 ? '+' : '';
       showHud(seekDelta >= 0 ? '⏩' : '⏪', pct, `${sign}${Math.round(seekDelta)}s`);
     }
@@ -799,8 +854,9 @@ function connect(name) {
     if (!gestureActive) return;
 
     if (gestureType === 'seek' && state.source) {
+      const duration = getDuration();
       const seekDelta = (currentDx / shell.offsetWidth) * 60;
-      const finalTime = Math.max(0, Math.min(startSeekTime + seekDelta, video.duration || Infinity));
+      const finalTime = Math.max(0, Math.min(startSeekTime + seekDelta, duration || Infinity));
       if (state.isHost) {
         player.seek(finalTime);
         emitControl(isPlaying(), finalTime, 'gesture-seek');
@@ -1029,10 +1085,10 @@ function hidePlayGate() {
 
 el.playOverlay.addEventListener('click', () => {
   hidePlayGate();
-  el.video.play().catch((err) => {
+  el.mediaPlayer.play().catch((err) => {
     if (err.name === 'NotAllowedError') {
-      el.video.muted = true;
-      el.video.play().catch(() => {});
+      el.mediaPlayer.muted = true;
+      el.mediaPlayer.play().catch(() => {});
     }
   });
 });
@@ -1068,9 +1124,9 @@ el.fileInput.addEventListener('change', () => {
   const file = el.fileInput.files?.[0];
   if (!file) return;
   teardownPlayback();
-  el.video.src = URL.createObjectURL(file);
+  el.mediaPlayer.src = { src: URL.createObjectURL(file), type: file.type || 'video/mp4' };
   showVideoElement();
-  el.video.controls = true;
+  el.mediaPlayer.controls = true;
   updateKindBadge('file');
   if (state.isHost) socket.emit('player:source', { kind: 'file', value: file.name, title: file.name });
   else state.source = { kind: 'file', value: file.name };

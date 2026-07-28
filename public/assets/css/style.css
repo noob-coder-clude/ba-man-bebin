@@ -606,12 +606,54 @@ details.faq__item p { margin: 0 0 16px; color: var(--muted); font-size: 0.94rem;
 }
 
 .player-shell iframe,
-.player-shell video {
+.player-shell video,
+.player-shell media-player {
   width: 100%;
   height: 100%;
   border: 0;
   display: block;
   background: #000;
+}
+
+/* =========================================================
+   Vidstack Player Customization
+   ========================================================= */
+
+media-player {
+  --video-brand: var(--brand, #7c5cff);
+  --media-brand: var(--brand, #7c5cff);
+  --media-focus-ring: var(--brand);
+}
+
+/* Ensure mobile controls are touch-friendly with >=44px buttons and thick progress bar */
+media-player [data-media-button],
+media-player .vds-button {
+  min-width: 44px !important;
+  min-height: 44px !important;
+}
+
+media-player .vds-time-slider,
+media-player [data-media-slider] {
+  min-height: 28px;
+}
+
+media-player .vds-slider-track {
+  height: 6px !important;
+}
+
+media-player .vds-slider-thumb {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+@media (max-width: 760px) {
+  media-player .vds-slider-track {
+    height: 8px !important;
+  }
+  media-player .vds-slider-thumb {
+    width: 20px !important;
+    height: 20px !important;
+  }
 }
 
 .player-empty { text-align: center; padding: 30px; color: var(--muted); }

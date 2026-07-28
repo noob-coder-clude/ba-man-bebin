@@ -59,10 +59,10 @@ app.use(
       useDefaults: true,
       directives: {
         'default-src': ["'self'"],
-        'script-src': ["'self'", "'unsafe-inline'", 'blob:', 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net'],
+        'script-src': ["'self'", "'unsafe-inline'", 'blob:', 'https://www.youtube.com', 'https://s.ytimg.com', 'https://cdn.jsdelivr.net', 'https://cdn.vidstack.io'],
         'worker-src': ["'self'", 'blob:'],
         'child-src': ["'self'", 'blob:'],
-        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net'],
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdn.jsdelivr.net', 'https://cdn.vidstack.io'],
         'font-src': ["'self'", 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'data:'],
         'img-src': ["'self'", 'data:', 'blob:', 'https:'],
         // blob: + https: so torrent streams and direct links both play.
