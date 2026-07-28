@@ -9,6 +9,16 @@ services:
       PORT: 3000
       CORS_ORIGIN: ${CORS_ORIGIN:-*}
       MAX_ROOM_USERS: ${MAX_ROOM_USERS:-50}
+      MAX_CALL_PEERS: ${MAX_CALL_PEERS:-4}
+      # Guards POST /api/admin/* (update trigger, YouTube cookie upload).
+      # install.sh generates a random one and writes it to .env.
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Optional ICE / NAT traversal — see .env.example
+      STUN_URL: ${STUN_URL:-}
+      TURN_URL: ${TURN_URL:-}
+      TURN_USER: ${TURN_USER:-}
+      TURN_PASS: ${TURN_PASS:-}
+      ALLOW_PRIVATE_MEDIA_HOSTS: ${ALLOW_PRIVATE_MEDIA_HOSTS:-}
       # Comma separated mirrors, all served by this one container.
       PUBLIC_DOMAINS: ${PUBLIC_DOMAINS:-}
       DOMAIN_HINTS: ${DOMAIN_HINTS:-}
@@ -25,7 +35,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # install.sh renders deploy/nginx.rendered.conf (untracked) and sets
+      # NGINX_CONF in .env; the tracked nginx.conf stays the manual template.
+      - ./deploy/${NGINX_CONF:-nginx.conf}:/etc/nginx/conf.d/default.conf:ro
       - ./deploy/certbot/conf:/etc/letsencrypt:ro
       - ./deploy/certbot/www:/var/www/certbot:ro
     networks: [bmb]

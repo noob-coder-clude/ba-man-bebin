@@ -4,9 +4,29 @@
 
 A sleek, bilingual (فارسی/English, RTL + LTR) watch-party platform. Create a room, share the link, and watch in perfect sync.
 
+---
+
+**کجا بالا بیاد؟** یکی از این سه راه را انتخاب کن:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/noob-coder-clude/ba-man-bebin)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https://github.com/noob-coder-clude/ba-man-bebin)
+[![Deploy on your own server](https://img.shields.io/badge/Deploy_on-Your_Own_Server-7c5cff?style=for-the-badge&logo=docker&logoColor=white)](#-روی-سرور-خودت-داکر)
+
+| گزینه | صادقانه‌اش |
+|---|---|
+| 🖥️ **سرور خودت (داکر)** | بهترین گزینه — **همه‌چیز کار می‌کند**: همگام‌سازی، چت، «پخش از طریق سرور» و (با دامنه + HTTPS) تماس تصویری. یک VPS کوچک کافی است. |
+| 🟣 **Render رایگان** | دامنه رایگان `onrender.com` **با HTTPS** می‌دهد (پس **تماس تصویری کار می‌کند**)، ولی بعد از ۱۵ دقیقه بی‌کاری **می‌خوابد** و بیدار شدنش **۳۰ تا ۵۰ ثانیه** طول می‌کشد. سهمیه ۷۵۰ ساعت در ماه. ⚠️ بیدار نگه‌داشتن با UptimeRobot راه‌حل نیست: هم سهمیه را می‌سوزاند (ماه ۷۲۰ ساعت است) و هم Render پینگ‌های uptime را بالاخره مسدود می‌کند. برای شب فیلم، چند دقیقه قبلش سایت را باز کن تا بیدار شود. |
+| 🚂 **Railway** | نمی‌خوابد و همه‌چیز کار می‌کند، ولی **رایگان نیست** (~۵$ در ماه). دکمه بالا به Template نیاز دارد؛ راه مطمئنِ دستی: در Railway گزینه **New Project → Deploy from GitHub** را بزن و همین ریپو را انتخاب کن — [`railway.json`](railway.json) آماده است. |
+| ☁️ **Cloudflare Workers** | **اصلاً کار نمی‌کند** — نه ffmpeg دارد، نه دیسک، نه اتصال دائمی (Socket.IO). |
+
+> 📌 [`render.yaml`](render.yaml) روی پلن `starter` تنظیم شده تا سرویس نخوابد؛ اگر پلن رایگان می‌خواهی، موقع ایمپورت (یا بعداً در داشبورد) instance type را روی `Free` بگذار.
+>
+> ⚠️ **تماس تصویری فقط روی HTTPS کار می‌کند** (یا `localhost`)، چون مرورگر دوربین و میکروفون را روی http ساده بلاک می‌کند. پس اگر `install.sh` را بدون دامنه اجرا کنی، دکمه تماس خطا می‌دهد — یا از همان اول دامنه بده.
+
 ## فهرست مطالب
 - [امکانات / Features](#-امکانات--features)
 - [نصب سریع روی سرور](#-نصب-سریع-روی-سرور)
+- [روی سرور خودت (داکر)](#-روی-سرور-خودت-داکر)
 - [اجرای محلی / Run locally](#-اجرای-محلی--run-locally)
 - [روش ۱ — Docker (پیشنهادی)](#-روش-۱--docker-پیشنهادی)
 - [روش ۲ — نصب مستقیم روی سرور (Ubuntu/Debian)](#️-روش-۲--نصب-مستقیم-روی-سرور-ubuntudebian)
@@ -18,6 +38,7 @@ A sleek, bilingual (فارسی/English, RTL + LTR) watch-party platform. Create 
 - [معماری / Architecture](#-معماری--architecture)
 - [API](#-api)
 - [نکات](#-نکات)
+- [تست‌ها](#-تست‌ها)
 
 ---
 
@@ -42,12 +63,67 @@ A sleek, bilingual (فارسی/English, RTL + LTR) watch-party platform. Create 
 ## ⚡ نصب سریع روی سرور
 
 ```bash
-bash deploy/check-ports.sh app.boxd.sh          # ۱. پورت‌ها باز است؟
-git clone https://github.com/noob-coder-clude/ba-man-bebin.git && cd ba-man-bebin
-sudo bash deploy/deploy.sh app.boxd.sh you@example.com   # ۲. نصب کامل
+# اختیاری: پورت‌ها، DNS و SSL را قبلش چک کن
+curl -fsSL https://raw.githubusercontent.com/noob-coder-clude/ba-man-bebin/main/deploy/check-ports.sh | bash -s -- example.com
+
+# نصب یک‌خطی با Docker (دامنه و ایمیل هر دو اختیاری‌اند)
+curl -fsSL https://raw.githubusercontent.com/noob-coder-clude/ba-man-bebin/main/install.sh | sudo bash -s -- example.com you@example.com
 ```
 
-راهنمای کامل قدم‌به‌قدم: **[`INSTALL.md`](INSTALL.md)**
+جزئیات کامل: [🐳 روی سرور خودت (داکر)](#-روی-سرور-خودت-داکر) — راهنمای قدم‌به‌قدم نصب دستی: **[`INSTALL.md`](INSTALL.md)**
+
+---
+
+## 🐳 روی سرور خودت (داکر)
+
+یک خط، همه‌چیز: اگر Docker نباشد نصبش می‌کند، ریپو را در `/opt/ba-man-bebin` کلون می‌کند،
+یک `ADMIN_TOKEN` تصادفی می‌سازد، `docker compose build` و `up` می‌زند و آخرش `/healthz` را چک می‌کند:
+
+```bash
+# فقط HTTP:
+curl -fsSL https://raw.githubusercontent.com/noob-coder-clude/ba-man-bebin/main/install.sh | sudo bash
+
+# با دامنه → گواهی Let's Encrypt هم خودکار گرفته می‌شود:
+curl -fsSL https://raw.githubusercontent.com/noob-coder-clude/ba-man-bebin/main/install.sh | sudo bash -s -- example.com you@example.com
+```
+
+- **آرگومان اول: دامنه** (اختیاری) — رکورد Aش باید از قبل به IP سرور بخورد. با دامنه، HTTPS هم خودکار راه می‌افتد.
+- **آرگومان دوم: ایمیل** (اختیاری) — برای ثبت گواهی Let's Encrypt.
+- آخر کار آدرس سایت و `ADMIN_TOKEN` را نشان می‌دهد (در `/opt/ba-man-bebin/.env` هم ذخیره می‌شود). توکن برای دکمه «به‌روزرسانی سرور» (`/api/admin/update`) و آپلود کوکی یوتیوب لازم است؛ با اجرای دوباره اسکریپت حفظ می‌شود.
+- اسکریپت خودش چک می‌کند که با **root** اجرا شده باشد و اگر نصب داکر شکست بخورد، پیام واضح می‌دهد.
+- پورت‌های ۸۰ و ۴۴۳ باید باز باشند.
+
+> ⚠️ **تماس تصویری فقط روی HTTPS کار می‌کند.** اگر `install.sh` را بدون دامنه اجرا کنی، سایت روی `http://<ip>` بالا می‌آید و مرورگر دوربین/میکروفون را بلاک می‌کند — پس **دکمه تماس خطا می‌دهد**. یا از همان اول دامنه بده، یا هر وقت دامنه گرفتی اسکریپت را دوباره با دامنه اجرا کن.
+
+مدیریت بعدی:
+
+```bash
+cd /opt/ba-man-bebin
+docker compose logs -f                       # لاگ زنده
+docker compose restart                       # ری‌استارت
+git pull && docker compose up -d --build     # به‌روزرسانی
+```
+
+دوست داری دستی و قدم‌به‌قدم جلو بروی؟ [روش ۱ — Docker](#-روش-۱--docker-پیشنهادی) و [روش ۲ — نصب مستقیم](#️-روش-۲--نصب-مستقیم-روی-سرور-ubuntudebian) جلوتر هستند.
+
+### 🚚 انتقال به سرور جدید
+
+سه قدم — `backup.sh create` روی قدیمی، `install.sh` روی جدید، `backup.sh restore`:
+
+```bash
+# ۱) روی سرور قدیمی — بکاپ:
+sudo bash deploy/backup.sh create
+#    خروجی: bmb-backup-XXXX.tar.gz (شامل .env با ADMIN_TOKEN، کانفیگ nginx و گواهی‌ها)
+scp bmb-backup-*.tar.gz root@IP-SERVER-JADID:/root/
+
+# ۲) روی سرور جدید — نصب تازه:
+curl -fsSL https://raw.githubusercontent.com/noob-coder-clude/ba-man-bebin/main/install.sh | sudo bash -s -- example.com you@example.com
+
+# ۳) روی سرور جدید — بازیابی:
+cd /opt/ba-man-bebin && sudo bash deploy/backup.sh restore /root/bmb-backup-*.tar.gz
+```
+
+`restore` خودش تشخیص می‌دهد نصب داکری است یا systemd، فایل‌ها را سر جای خودشان برمی‌گرداند و سرویس را دوباره بالا می‌آورد. چون `ADMIN_TOKEN` داخل `.env` در بکاپ است، دکمه به‌روزرسانی و آپلود کوکی بدون تنظیم دوباره کار می‌کنند. اگر رکورد A دامنه هم حالا به سرور جدید اشاره می‌کند، همان گواهی‌های قبلی کار می‌کنند؛ وگرنه `install.sh` را دوباره با دامنه اجرا کن تا گواهی تازه صادر شود.
 
 ---
 
@@ -360,11 +436,14 @@ test/
   call-engine.test.mjs     تست موتور mesh: ۴ نفر → ۶ اتصال، بدون glare
   ducking.test.mjs         تست الگوریتم ducking با صدای شبیه‌سازی‌شده
 deploy/
-  nginx.conf               ریورس‌پروکسی + WebSocket + SSL
+  nginx.conf               ریورس‌پروکسی + WebSocket + SSL (قالب دستی)
   ba-man-bebin.service     یونیت systemd
-  deploy.sh                نصب خودکار روی VPS
+  deploy.sh                نصب خودکار روی VPS (بدون داکر، روش ۲)
   check-ports.sh           بررسی پورت ۸۰/۴۴۳، DNS، SSL و WebSocket
   add-domain.sh            افزودن دامنه جدید به همان سرور
+  backup.sh                create/restore برای انتقال .env و گواهی‌ها به سرور جدید
+install.sh                 اینستالر یک‌خطی Docker روی VPS: نصب داکر، کلون در /opt،
+                           ADMIN_TOKEN تصادفی، compose up و (با دامنه) گواهی خودکار
 ```
 
 **چطور همگام می‌ماند:** سرور «منبع حقیقت» را نگه می‌دارد (`playing`, `time`, `updatedAt`).
