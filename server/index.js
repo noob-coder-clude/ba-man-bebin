@@ -391,6 +391,13 @@ io.on('connection', (socket) => {
    * offers" rule, which is what keeps a 4-way mesh at exactly 6 clean
    * connections with zero glare (no two peers offering each other at once).
    */
+  socket.on('call:invite', () => {
+    const room = joinedRoom && getRoom(joinedRoom);
+    const member = room?.members.get(socket.id);
+    if (!room || !member) return;
+    socket.to(room.id).emit('call:invite', { id: socket.id, name: member.name, count: room.call.size });
+  });
+
   socket.on('call:join', (payload = {}, ack) => {
     const room = joinedRoom && getRoom(joinedRoom);
     const member = room?.members.get(socket.id);

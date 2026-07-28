@@ -79,3 +79,18 @@
 - گوگل درایو: ویدیوهای Drive رو مستقیم در اتاق پخش کن (`/api/media/drive?url=`)
 - QR code لینک دعوت در اتاق
 - PWA manifest + Service Worker برای offline و installable
+
+## 🔜 فاز ۶ — نسخه LITE برای هاست‌های ۱۰۰ مگی
+
+- [ ] `LITE_MODE`: پراکسی به‌صورت پیش‌فرض خاموش و قابلیت‌های وابسته به ffmpeg/yt-dlp پنهان شوند.
+- [ ] بستهٔ production با هرس `node_modules` (حدود ۴٫۳ مگابایت) و health check.
+- [ ] مستندات محدودیت پهنای‌باند AlwaysData (۱۰ گیگ ماهانه؛ مناسب حدود ۲–۳ فیلم HD).
+
+## تصمیم‌های فنی ثبت‌شده
+
+- AI برای ducking لازم نیست؛ `AnalyserNode` و `GainNode` بومی، آنی و رایگان‌اند.
+- انتخاب انکودر HW/HW+/SW در مرورگر ممکن نیست.
+- Cloudflare Workers ffmpeg، دیسک یا سوکت دائمی ندارد؛ فقط Cloudflare Containers مناسب است.
+- GitHub Pages فقط استاتیک است؛ Codespaces پس از ۳۰ دقیقه می‌خوابد و فقط برای تست است.
+- UptimeRobot راه بیدار نگه‌داشتن Render نیست؛ سهمیه را می‌سوزاند و پینگ‌ها محدود می‌شوند.
+- ربات تلگرام تا ۲۰MB دانلود می‌کند؛ فیلم باید لینک باشد، مگر Bot API Server محلی.
