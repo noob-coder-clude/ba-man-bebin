@@ -8,3 +8,6 @@ dist/
 coverage/
 certbot/
 data/
+
+# install.sh renders this at deploy time (keeps git pulls clean)
+deploy/nginx.rendered.conf
