@@ -22,7 +22,6 @@ const el = {
   empty: document.getElementById('playerEmpty'),
   ytHost: document.getElementById('ytHost'),
   video: document.getElementById('localVideo'),
-  media: document.getElementById('mediaPlayer'),
   playOverlay: document.getElementById('playOverlay'),
   overlayPlayBtn: document.getElementById('overlayPlayBtn'),
   sourceInput: document.getElementById('sourceInput'),
@@ -118,7 +117,6 @@ window.onYouTubeIframeAPIReady = () => {
 
 function createYtPlayer(videoId, playback) {
   el.empty.classList.add('hidden');
-  el.media.classList.add('hidden');
   el.video.classList.add('hidden');
   el.ytHost.classList.remove('hidden');
 
@@ -272,7 +270,7 @@ function teardownPlayback() {
 function showVideoElement() {
   el.empty.classList.add('hidden');
   el.ytHost.classList.add('hidden');
-  el.media.classList.remove('hidden');
+  el.video.classList.remove('hidden');
 }
 
 // Resume points are local-only: source URLs are the natural, private key.
