@@ -166,7 +166,7 @@ const player = {
   },
   currentTime() {
     if (this.kind === 'youtube') return state.ytPlayer?.getCurrentTime?.() ?? 0;
-    return el.mediaPlayer.currentTime || 0;
+    return el.mediaPlayer.state?.currentTime ?? el.mediaPlayer.currentTime ?? 0;
   },
   seek(time) {
     if (this.kind === 'youtube') state.ytPlayer?.seekTo?.(time, true);
@@ -272,7 +272,7 @@ function attachDuckSink(ducker) {
 // Keep "100%" in sync when the viewer moves the volume themselves.
 el.mediaPlayer.addEventListener('volume-change', () => {
   const video = getInternalVideo();
-  const vol = video ? video.volume : el.mediaPlayer.volume;
+  const vol = video ? video.volume : (el.mediaPlayer.state?.volume ?? el.mediaPlayer.volume ?? 1);
   state.call?.ducker?.noteUserVolume(vol);
 });
 
@@ -516,7 +516,7 @@ function isPlaying() {
     return state.ytPlayer?.getPlayerState?.() === 1;
   }
   const hasMedia = Boolean(el.mediaPlayer.src || el.mediaPlayer.state.canPlay);
-  return hasMedia && !el.mediaPlayer.paused;
+  return hasMedia && !(el.mediaPlayer.state?.paused ?? true);
 }
 
 function emitControl(playing, time, reason) {
@@ -527,7 +527,9 @@ function emitControl(playing, time, reason) {
 ['play', 'pause', 'seeked', 'playing'].forEach((evt) => {
   el.mediaPlayer.addEventListener(evt, () => {
     if (!state.isHost || state.suppress) return;
-    emitControl(!el.mediaPlayer.paused, el.mediaPlayer.currentTime, evt);
+    const isPaused = el.mediaPlayer.state?.paused ?? true;
+    const time = el.mediaPlayer.state?.currentTime ?? el.mediaPlayer.currentTime ?? 0;
+    emitControl(!isPaused, time, evt);
   });
 });
 
@@ -795,7 +797,7 @@ function connect(name) {
     lastTapX = t.clientX;
 
     startBrightness = parseFloat(shell.style.filter?.replace(/brightness\(([\d.]+)\)/, '$1') || '1');
-    startVolume = mediaPlayer.volume;
+    startVolume = mediaPlayer.state?.volume ?? mediaPlayer.volume ?? 1;
     startSeekTime = player.currentTime();
   }, { passive: false });
 
