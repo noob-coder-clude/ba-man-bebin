@@ -75,7 +75,7 @@ object BehineScanners {
   }
 
   private fun logFiles(): List<File> {
-    val d = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOAD)
+    val d = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
     return if (d.isDirectory) (d.listFiles()?.filter { it.isFile && it.name.endsWith(".log", true) } ?: emptyList()) else emptyList()
   }
 
