@@ -1,15 +1,115 @@
 plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
+
+// ===========================================================================
+// STABLE RELEASE SIGNING  (Play-Protect fix; pattern adopted from the Aether
+// project, docs/SIGNING.md)
+//
+// Root cause of the Google Play Protect "unknown developer / blocked to
+// protect your device" warning on sideloaded APKs: builds signed with the
+// auto-generated DEBUG key. That key is re-created on every machine/CI
+// runner, so to Google every build looked like a brand-new unknown developer.
+//
+// Fix:
+//   1. ALWAYS sign release builds with ONE stable keystore.
+//   2. Enable the FULL v1+v2+v3 signature scheme chain (v3 is OFF by default).
+//   3. NEVER change that key afterwards (changing it = reputation resets and
+//      updates can no longer install over the old app).
+//
+// Key sources, in priority order:
+//   1. android-app/keystore.properties  (local builds; git-ignored)
+//   2. KEYSTORE_PATH / KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD env vars
+//   3. android-app/signing/behine-ci.keystore.b64  (committed CI keystore —
+//      public by definition; it keeps the signature STABLE, not secret)
+// If none of them exist, release tasks FAIL FAST instead of silently emitting
+// a debug-signed, warning-magnet APK.
+// ===========================================================================
+def ksProps = new Properties()
+def ksPropsFile = rootProject.file('keystore.properties')
+if (ksPropsFile.exists()) ksPropsFile.withInputStream { ksProps.load(it) }
+
+def signingValue = { String prop, String env ->
+  def v = ksProps.getProperty(prop) ?: System.getenv(env)
+  (v != null && !v.trim().isEmpty()) ? v.trim() : null
+}
+def storePathVal = signingValue('storeFile', 'KEYSTORE_PATH')
+def storePassVal = signingValue('storePassword', 'KEYSTORE_PASSWORD')
+def keyAliasVal  = signingValue('keyAlias',  'KEY_ALIAS')
+def keyPassVal   = signingValue('keyPassword', 'KEY_PASSWORD')
+
+def detectType = { File f ->
+  def n = f.name.toLowerCase()
+  (n.endsWith('.p12') || n.endsWith('.pfx')) ? 'PKCS12' : 'JKS'
+}
+
+def hasOwnKeystore = storePathVal != null && rootProject.file(storePathVal).exists()
+def ciB64 = rootProject.file('signing/behine-ci.keystore.b64')
+def useCiKeystore = !hasOwnKeystore && ciB64.exists()
+def ciKeystoreFile = rootProject.file('build/behine-ci.p12')
+if (useCiKeystore) {
+  ciKeystoreFile.parentFile.mkdirs()
+  ciKeystoreFile.bytes = ciB64.text.trim().decodeBase64()
+}
+def signingReady = hasOwnKeystore || useCiKeystore
+
 android {
   namespace 'com.behine.optimizer'
   compileSdk 34
+
   defaultConfig {
     applicationId 'com.behine.optimizer'
     minSdk 26
     targetSdk 34
-    versionCode 1
+    // CI passes an ever-increasing code so updates always install in place.
+    versionCode (System.getenv('CI_VERSION_CODE') ?: '1').toInteger()
     versionName '0.1'
   }
+
+  signingConfigs {
+    release {
+      if (hasOwnKeystore) {
+        def f = rootProject.file(storePathVal)
+        storeFile = f
+        storeType = detectType(f)
+        storePassword = storePassVal
+        keyAlias = keyAliasVal
+        keyPassword = keyPassVal
+      } else if (useCiKeystore) {
+        storeFile = ciKeystoreFile
+        storeType = 'PKCS12'
+        storePassword = 'behine-ci-keystore'
+        keyAlias = 'behine-ci'
+        keyPassword = 'behine-ci-keystore'
+      }
+      // Full modern scheme chain (reputable sideloaded apps ship all three).
+      enableV1Signing = true
+      enableV2Signing = true
+      enableV3Signing = true
+    }
+  }
+
+  buildTypes {
+    debug { applicationIdSuffix '.debug' }
+    release {
+      minifyEnabled false
+      signingConfig = signingReady ? signingConfigs.release : null
+    }
+  }
+
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
   kotlinOptions { jvmTarget = '17' }
-  buildTypes { debug { applicationIdSuffix '.debug' } release { minifyEnabled false } }
+}
+
+// Never silently emit a debug-signed release: stop with a clear message.
+if (!signingReady) {
+  tasks.configureEach { t ->
+    if ((t.name.startsWith('assemble') || t.name.startsWith('package') || t.name.startsWith('bundle'))
+        && t.name.contains('Release')) {
+      t.doFirst {
+        throw new GradleException(
+          'No stable release keystore found (keystore.properties, KEYSTORE_* env vars, ' +
+          'or signing/behine-ci.keystore.b64). Refusing to build a debug-signed release — ' +
+          'that is exactly what triggers the Play Protect warning and breaks in-place updates.')
+      }
+    }
+  }
 }

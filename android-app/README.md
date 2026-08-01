@@ -17,15 +17,31 @@
 | INTERNET | آپدیت دیتابیس تهدید |
 | KILL_BACKGROUND_PROCESSES | تکمیل‌کننده‌ی بستن |
 
+## امضا و Play Protect (الگوی پروژه‌ی Aether)
+هشدار «برنامه‌ی ناشناس / مسدود توسط Play Protect» ریشه‌اش معمولاً **امضای debug** است: کلید debug روی هر سیستم متفاوت ساخته می‌شود، پس از دید گوگل «هر بیلد = یک توسعه‌دهنده‌ی ناشناس جدید». راه‌حل ما:
+
+1. **کلید ثابت همیشگی** — RSSA-4096 با اعتبار ۳۰ سال، در `signing/behine-ci.keystore.b64` کامیت شده (عمومی است؛ «پایداری امضا» را حل می‌کند نه «اصالت» — برای اپ شخصی کافی است). **هرگز عوضش نکنید.**
+2. **زنجیره‌ی کامل امضا v1+v2+v3** — v3 در AGP پیش‌فرض خاموش است؛ ما روشن کرده‌ایم.
+3. **هیچ fallbackی به debug نیست** — بدون کی‌استور، بیلد release با خطای واضح می‌ایستد.
+4. **اثرانگشت پین‌شده** — CI اثرانگشت SHA-256 امضاکننده را با `signing/expected-signer.txt` چک می‌کند؛ اگر کلید عوض شود بیلد قرمز می‌شود (به‌جای اینکه کاربر موقع نصب خطا ببیند).
+5. **بدون REQUEST_INSTALL_PACKAGES** — بزرگ‌ترین مجوز پرریسک را اصلاً نداریم؛ آپدیت خودت دستی از Artifacts نصب می‌شود.
+
+> اعتبار گواهی نزد گوگل **به‌مرور و سمت سرور** ساخته می‌شود: با کلید ثابت + امضای کامل، بعد از چند نصب اول هشدار برای همیشه محو می‌شود. اولین نصب ممکن است هنوز یک‌بار هشدار عمومی بدهد → «Scan/نصب در هر صورت». اشکالی ندارد.
+
 ## بیلد APK
-**روش خودکار (پیشنهادی):** فایل `ci/android-apk.yml` را از رابط گیت‌هاب کپی به مسیر `.github/workflows/android-apk.yml` کنید (Actions → New workflow → paste) — بعد از هر پوش، APK در بخش Artifacts آن ران آماده می‌شود.
+**روش خودکار (پیشنهادی):** فایل `ci/android-apk.yml` را از رابط گیت‌هاب کپی به مسیر `.github/workflows/android-apk.yml` **روی همان برنش arena** کنید (Add file → Create new file با برنش انتخاب‌شده → paste → Commit) — بلافاصله همان پوش، اولین ران را شروع می‌کند و بعد از هر پوش، APK امضاشده در بخش **Artifacts** آماده است (`behine-release-apk`).
 (توکن بات Arena اجازه‌ی ساخت workflow ندارد؛ برای همین فایل این‌جاست.)
 
 **روش دستی:**
 ```bash
-cd android-app && gradle assembleDebug
-# خروجی: app/build/outputs/apk/debug/app-debug.apk
+cd android-app && gradle assembleRelease
+# خروجی: app/build/outputs/apk/release/app-release.apk
+# امضا را خودت چک کن:
+# apksigner verify --print-certs app-release.apk
+#  (اثرانگشت باید با signing/expected-signer.txt یکی باشد)
 ```
 
+کی‌استور شخصی خودت را هم می‌توانی بسازی: `bash scripts/generate-keystore.sh` (تعویض کلید = یک‌بار حذف/نصب مجدد).
+
 ## نصب
-APK دیباگ با کلید دیباگ امضا می‌شود → هنگام نصب «نصب از منابع ناشناس» را بزنید. Play Protect ممکن است به MANAGE_EXTERNAL_STORAGE و Accessibility هشدار عمومی بدهد (طبیعی برای اپ سایدلود غیر-Play).
+هنگام نصب «نصب از منابع ناشناس» را بزنید. اگر Play Protect هشدار عمومی داد (برای اپ سایدلود تازه طبیعی است)، «Scan» یا «Install anyway». نسخه‌های بعدی بدون حذف روی هم نصب می‌شوند چون امضا و versionCode صعودی تضمین‌شده است.

@@ -1,0 +1,11 @@
+# local signing material (the committed CI key lives in signing/*.b64)
+keystore.properties
+*.keystore
+*.p12
+*.pfx
+
+# build outputs
+.gradle/
+build/
+app/build/
+local.properties
