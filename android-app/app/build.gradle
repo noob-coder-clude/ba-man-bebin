@@ -51,6 +51,13 @@ if (useCiKeystore) {
 }
 def signingReady = hasOwnKeystore || useCiKeystore
 
+// CI passes an ever-increasing code so updates always install in place.
+// IMPORTANT: precompute at script level and ASSIGN below. Writing it inline
+// as  versionCode (expr).toInteger()  is an ambiguous Groovy command-chain
+// and makes AGP evaluation fail with "Value is null".
+def envVersionCode = System.getenv('CI_VERSION_CODE')
+def behineVersionCode = (envVersionCode != null && envVersionCode.trim().isInteger()) ? envVersionCode.trim().toInteger() : 1
+
 android {
   namespace 'com.behine.optimizer'
   compileSdk 34
@@ -59,8 +66,7 @@ android {
     applicationId 'com.behine.optimizer'
     minSdk 26
     targetSdk 34
-    // CI passes an ever-increasing code so updates always install in place.
-    versionCode (System.getenv('CI_VERSION_CODE') ?: '1').toInteger()
+    versionCode = behineVersionCode
     versionName '0.1'
   }
 
