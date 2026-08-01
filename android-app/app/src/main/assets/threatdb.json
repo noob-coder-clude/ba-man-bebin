@@ -1,0 +1,8 @@
+{
+  "db": "behine-threatdb",
+  "version": 1,
+  "updated": "2026-08-01",
+  "note": "Seed DB — intentionally empty for now. The OTA update pipeline (updateThreatDb) is fully real; entries are populated from public APK malware-hash feeds (MalwareBazaar daily SHA-256 dump) in the next step.",
+  "hashes": [],
+  "names": {}
+}

@@ -36,6 +36,7 @@ const I18N = {
     "clean.cta": "پاک‌سازی",
     "clean.hint": "💡 موارد «امن» بدون ریسک حذف می‌شوند؛ «بازبینی»‌ها را خودتان تأیید کنید. مدل AI فایل‌های حیاتی را تشخیص و حفظ می‌کند.",
     "clean.scan": "اسکن هوشمند حافظه…",
+    "clean.real": "🧹 پاک‌سازی واقعی انجام شد", "junk.perm.storage": "برای پاک‌سازی واقعی، اجازه‌ی «دسترسی به همه‌ی فایل‌ها» لازم است",
     "clean.wiping": "پاک‌سازی ایمن در حال انجام…",
     "clean.done.big": (s) => `${s} پاک شد`,
     "clean.done.sub": "فضای ذخیره‌سازی آزاد شد • هیچ فایل شخصی حذف نشد",
@@ -76,6 +77,7 @@ const I18N = {
     "sec.scan.quick": "اسکن سریع در حال اجرا…", "sec.scan.full": "اسکن عمیق با AI…",
     "sec.files": (n) => `${faN(n)} فایل`,
     "sec.found1": "۱ تهدید یافت شد", "sec.safe2": "دستگاه امن است ✓",
+    "sec.scan.real": "اسکن واقعی SHA-256 برنامه‌ها…", "toast.uninstall": "🗑️ درخواست حذف ارسال شد",
     "sec.safesub": (n) => `${faN(n)} فایل بررسی شد • بدون تهدید`,
     "sec.threat.t": "۱ برنامه مشکوک", "sec.threat.trojan": "Flash Ultra.apk — تروجان FlashGen",
     "sec.qua": "قرنطینه", "sec.qua.close": "قرنطینه و تمام",
@@ -153,6 +155,7 @@ const I18N = {
     "clean.cta": "Clean",
     "clean.hint": "💡 “Safe” items are removed risk-free; confirm “Review” items yourself. The AI model detects and protects critical files.",
     "clean.scan": "Smart-scanning storage…",
+    "clean.real": "🧹 Real cleaning finished", "junk.perm.storage": "Real cleaning needs the “All files access” permission",
     "clean.wiping": "Safe cleaning in progress…",
     "clean.done.big": (s) => `${s} cleaned`,
     "clean.done.sub": "Storage space freed • no personal files were touched",
@@ -190,6 +193,7 @@ const I18N = {
     "sec.scan.quick": "Quick scan running…", "sec.scan.full": "Deep AI scan…",
     "sec.files": (n) => `${n} files`,
     "sec.found1": "1 threat found", "sec.safe2": "Device is secure ✓",
+    "sec.scan.real": "Real SHA-256 scan of apps…", "toast.uninstall": "🗑️ Uninstall request sent",
     "sec.safesub": (n) => `${n} files checked • no threats`,
     "sec.threat.t": "1 suspicious app", "sec.threat.trojan": "Flash Ultra.apk — FlashGen trojan",
     "sec.qua": "Quarantine", "sec.qua.close": "Quarantine & finish",
@@ -746,6 +750,34 @@ async function runClean() {
   if (!targets.length) { toast(t("toast.nothing")); return; }
   cleaning = true;
 
+  /* real path: native junk scan results (APK) */
+  const natC = window.BehineNative;
+  if (natC && targets.some(j => j.native)) {
+    if (!natC.isAllFilesGranted || !natC.isAllFilesGranted()) {
+      toast(t("junk.perm.storage"));
+      natC.openAllFilesSettings && natC.openAllFilesSettings();
+      cleaning = false; return;
+    }
+    flowStart("rd-clean", t("clean.scan"));
+    await sleep(700); flowPct(35);
+    $("boTitle").textContent = t("clean.wiping");
+    const res = (() => { try { return JSON.parse(natC.cleanJunk(JSON.stringify(targets.map(x => x.cat)))); } catch (e) { return null; } })();
+    const freed = (res && typeof res.freedMB === "number") ? res.freedMB : 0;
+    targets.forEach(j => { j.cleaned = true; j.selected = false; });
+    state.cleaner.lastDays = 0;
+    flowPct(100); await sleep(350);
+    flowFinish("✨", t("clean.done.big", fmtMb(freed)), "safe", t("clean.done.sub"), t("boost.done"),
+      () => { cleaning = false; renderAll(); toast(t("clean.real")); });
+    return;
+  }
+  /* native but storage permission not granted yet → guide instead of faking */
+  if (natC) {
+    toast(t("junk.perm.storage"));
+    natC.openAllFilesSettings && natC.openAllFilesSettings();
+    cleaning = false;
+    return;
+  }
+
   flowStart("rd-clean", t("clean.scan"));
   await sleep(1100); flowPct(14);
   $("boTitle").textContent = t("clean.wiping");
@@ -771,8 +803,39 @@ async function runClean() {
 /* ── Antivirus scan flow ── */
 let scanning = false;
 const scanPaths = ["/data/app/com.whatsapp", "/storage/dcim/camera", "/data/data/org.telegram.messenger", "/sdcard/download", "/data/app/com.instagram", "/system/priv-app", "/storage/android/obb", "/data/user/0/com.spotify", "/sdcard/pictures", "/data/app/flash.ultra"];
+
+/* real scan inside the APK: SHA-256 of every installed APK vs the threat DB */
+async function runNativeScan(full) {
+  const nat = window.BehineNative;
+  scanning = true;
+  flowStart("rd-scan", (full ? t("sec.scan.full") : t("sec.scan.quick")) + " · live");
+  flowPct(8);
+  flowLine("📦", t("sec.scan.real"), "…");
+  const res = (() => { try { return JSON.parse(nat.scanInstalledApps()); } catch (e) { return null; } })();
+  flowPct(88); await sleep(300);
+
+  const s = state.security;
+  s.lastScan = new Date(); s.scansToday++; s.filesToday += (res && res.scanned) || 0;
+  if (res && typeof res.dbVersion === "number") s.dbv = res.dbVersion;
+
+  const th = res && res.threats && res.threats.length ? res.threats[0] : null;
+  if (th) {
+    flowLine("⚠️", (th.label || th.pkg) + " · " + (th.name || ""), t("sec.found1"), true);
+    await sleep(500);
+    flowFinish("🚨", t("sec.found1"), "threat", th.pkg + " · sha256:" + (th.sha || "…"), t("sec.qua.close"),
+      () => { scanning = false; state.security.realThreatPkg = th.pkg; renderAll(); });
+  } else {
+    const sub = t("sec.safesub", N((res && res.scanned) || 0));
+    flowFinish("🛡️", t("sec.safe2"), "safe", sub + " · db v" + ((res && res.dbVersion) || "?"), t("boost.done"),
+      () => { scanning = false; renderAll(); });
+  }
+  flowPct(100);
+  renderSecurity(); renderDashboard();
+}
+
 async function runScan(full) {
   if (scanning) return;
+  if (window.BehineNative && window.BehineNative.scanInstalledApps) return runNativeScan(full);
   scanning = true;
   flowStart("rd-scan", full ? t("sec.scan.full") : t("sec.scan.quick"));
 
@@ -804,6 +867,15 @@ async function runScan(full) {
 }
 
 function quarantine() {
+  const nat = window.BehineNative;
+  const p = state.security.realThreatPkg;
+  if (nat && p) {
+    try { nat.uninstallApp(p); } catch (e) {}
+    state.security.realThreatPkg = null;
+    toast(t("toast.uninstall"));
+    renderAll();
+    return;
+  }
   state.security.threat = false;
   renderAll();
   toast(t("toast.qua"));
@@ -891,6 +963,37 @@ setTimeout(() => {
     syncBatt(); setInterval(syncBatt, 5000);
     const m = J(nat.getMemory());
     if (m && m.totalMB) state.ramTotal = Math.max(2, Math.round(m.totalMB / 1024));
+
+    /* real junk categories (replace the mock list when all-files access is granted) */
+    try {
+      const jr = J(nat.scanJunk ? nat.scanJunk() : null);
+      if (jr && jr.perm && Array.isArray(jr.cats) && jr.cats.length) {
+        const icons = { cache: "🗂️", thumbnails: "🖼️", logs: "🧾", emptydirs: "📁" };
+        junk.length = 0;
+        jr.cats.forEach((c, i) => junk.push({
+          id: "rj" + i, cat: c.id, mb: c.mb, count: c.count, en: c.label, fa: c.label,
+          ic: icons[c.id] || "📁", level: c.level, native: true,
+          selected: c.level === "safe", cleaned: false,
+        }));
+        renderCleaner(); renderDashboard();
+      }
+    } catch (e) {}
+
+    /* real threat DB: show the true version now; pull the OTA update once, later */
+    try {
+      const di = J(nat.threatDbInfo ? nat.threatDbInfo() : null);
+      if (di && typeof di.version === "number") { state.security.dbv = di.version; renderSecurity(); }
+      setTimeout(() => {
+        try {
+          const up = J(nat.updateThreatDb ? nat.updateThreatDb() : null);
+          if (up && up.ok && !up.same) {
+            const di2 = J(nat.threatDbInfo());
+            if (di2 && typeof di2.version === "number") { state.security.dbv = di2.version; renderSecurity(); }
+          }
+        } catch (e) {}
+      }, 20000);
+    } catch (e) {}
+
     if (!nat.isUsageGranted()) { toast(t("toast.usageperm")); nat.openUsageSettings(); return; }
     const top = J(nat.getTopApps());
     if (Array.isArray(top) && top.length) {

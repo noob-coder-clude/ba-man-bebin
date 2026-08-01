@@ -84,6 +84,30 @@ class BehineBridge(act: Activity) {
     app.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
   }
 
+  /* ---------- real junk & threat scanners ---------- */
+  @JavascriptInterface fun isAllFilesGranted(): Boolean = BehineScanners.isAllFilesGranted()
+
+  @JavascriptInterface fun openAllFilesSettings() {
+    try {
+      val i = if (android.os.Build.VERSION.SDK_INT >= 30)
+        Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + app.packageName))
+      else Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+      app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (e: Throwable) {
+      try { app.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e2: Throwable) {}
+    }
+  }
+
+  @JavascriptInterface fun scanJunk(): String = BehineScanners.scanJunk(app)
+  @JavascriptInterface fun cleanJunk(cats: String): String = BehineScanners.cleanJunk(app, cats)
+  @JavascriptInterface fun scanInstalledApps(): String = BehineScanners.scanInstalledApps(app)
+  @JavascriptInterface fun threatDbInfo(): String = BehineScanners.threatDbInfo(app)
+  @JavascriptInterface fun updateThreatDb(): String = BehineScanners.updateThreatDb(app)
+
+  @JavascriptInterface fun uninstallApp(pkg: String) {
+    try { app.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:$pkg")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (e: Throwable) {}
+  }
+
   /* ---------- force close ---------- */
   @JavascriptInterface fun forceClose(pkgsJson: String): String {
     try {
