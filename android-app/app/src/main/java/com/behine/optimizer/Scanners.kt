@@ -242,7 +242,8 @@ object BehineScanners {
       val apk = try { File(ai.sourceDir) } catch (e: Throwable) { null }
       if (apk == null || !apk.isFile) { skipped++; continue }
       if (apk.length() > MAX_HASH_BYTES) { scanned++; skipped++; continue }
-      val sha = sha256(apk) ?: run { skipped++; continue }
+      val sha = sha256(apk)
+      if (sha == null) { skipped++; continue }
       scanned++
       if (db.hashes.contains(sha)) {
         val label = try { pm.getApplicationLabel(ai).toString() } catch (e: Throwable) { pi.packageName }

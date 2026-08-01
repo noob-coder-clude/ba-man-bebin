@@ -52,7 +52,12 @@ gradle --no-daemon --stacktrace -p android-app assembleRelease 2>&1 | tee /tmp/b
 CODE=${PIPESTATUS[0]}
 set -e
 if [ "$CODE" -ne 0 ]; then
-  tail -n 150 /tmp/behine-build.log > "$ERRLOG"
+  {
+    echo "===== compiler / failure lines (grep) ====="
+    grep -E "^e: |error: |FAILED|What went wrong" /tmp/behine-build.log | head -40
+    echo "===== raw tail ====="
+    tail -n 200 /tmp/behine-build.log
+  } > "$ERRLOG"
   setup_git
   git add "$ERRLOG"
   git commit -m "ci: build failure log ${GITHUB_RUN_ID:-local} [skip ci]" || true
