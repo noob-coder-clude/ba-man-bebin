@@ -3,19 +3,20 @@
 # HOW TO ENABLE (one time, from the GitHub web UI — bots may not push
 # workflow files):
 #   1. Open the branch  arena/019fb441-ba-man-bebin  (top-left switcher).
-#   2. Add file → Create new file → name it exactly:
-#         .github/workflows/android-apk.yml
-#   3. Paste this file's whole content and commit DIRECTLY to that branch.
-#   The commit itself triggers the first run (see the paths filter below).
+#   2. Open .github/workflows/android-apk.yml → Edit (pencil icon).
+#   3. Select ALL of the old content, PASTE this file instead, Commit.
 #
-# What this workflow does on every push to arena/** that touches android-app/**:
-#   - generates + persists a stable CI signing keystore IF it is missing
-#     (self-healing; normally the committed signing/behine-ci.keystore.b64
-#     is reused so the signature NEVER changes),
-#   - builds a RELEASE APK signed v1+v2+v3,
-#   - verifies the signature with apksigner (fails the build on a debug cert,
-#     a missing v2 scheme, or a changed signer fingerprint),
-#   - uploads app-release.apk as the  behine-release-apk  artifact.
+# IMPORTANT: this yaml is intentionally THIN and should never need another
+# edit — ALL build logic lives in android-app/ci/build.sh (a normal repo
+# file that can be updated by any push). If the build logic changes later,
+# only build.sh changes; you never have to paste this file again.
+#
+# What happens on every push to arena/** that touches android-app/**:
+#   - a signed (v1+v2+v3) RELEASE APK is built with the stable CI keystore,
+#   - the signature is verified (apksigner + pinned fingerprint),
+#   - app-release.apk is uploaded as the  behine-release-apk  artifact.
+#   - on failure, the gradle log tail is committed to
+#     android-app/ci/last-build-errors.log.txt for diagnosis.
 
 name: build-behine-apk
 
@@ -26,7 +27,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write # needed to persist the CI keystore / signer pin back to the repo
+  contents: write # needed to persist the CI keystore / signer pin / failure logs
 
 jobs:
   apk:
@@ -36,68 +37,17 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '17' }
       - uses: android-actions/setup-android@v3
+      # Pin the Gradle version — never rely on a (possibly absent/too old)
+      # runner-provided gradle. AGP 8.5.2 needs Gradle >= 8.7.
       - uses: gradle/actions/setup-gradle@v4
-
-      - name: Prepare stable CI signing keystore
-        run: |
-          set -e
-          KS_B64=android-app/signing/behine-ci.keystore.b64
-          if [ -f "$KS_B64" ]; then
-            echo "Reusing the persisted CI keystore (signature stays identical to previous builds)."
-          else
-            echo "::warning::Persisted CI keystore missing — generating a new one now."
-            if [ -f android-app/signing/expected-signer.txt ]; then
-              echo "::error::A signer fingerprint is pinned but the keystore file is gone."
-              echo "::error::Restore signing/behine-ci.keystore.b64, otherwise updates cannot install over the old app."
-              exit 1
-            fi
-            TMP_KS="$RUNNER_TEMP/behine-ci.p12"
-            keytool -genkeypair -v -keystore "$TMP_KS" -storetype PKCS12 \
-              -storepass behine-ci-keystore -keypass behine-ci-keystore \
-              -alias behine-ci -keyalg RSA -keysize 4096 -validity 10950 \
-              -dname "CN=Behine CI, OU=Behine, O=Behine"
-            base64 -w0 "$TMP_KS" > "$KS_B64"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add "$KS_B64"
-            git commit -m "chore: persist Behine CI signing keystore [skip ci]"
-            git push
-            echo "::notice title=Signing key created::Permanent CI keystore committed; every future build reuses it."
-          fi
-
-      - name: Assemble signed release APK
+        with:
+          gradle-version: '8.10.2'
+      - name: Build + verify APK (all logic in android-app/ci/build.sh)
         env:
           CI_VERSION_CODE: ${{ github.run_number }}
-        run: gradle --no-daemon -p android-app assembleRelease
-
-      - name: Verify signature (Play Protect gate)
-        run: |
-          set -e
-          APK=android-app/app/build/outputs/apk/release/app-release.apk
-          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee /tmp/sig.txt
-          grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/sig.txt \
-            || { echo "::error::APK is missing the v2 signature scheme"; exit 1; }
-          if grep -qi "android debug" /tmp/sig.txt; then
-            echo "::error::APK is signed with a DEBUG certificate — refusing to publish"; exit 1
-          fi
-          FP=$(grep -i "Signer #1 certificate SHA-256 fingerprint" /tmp/sig.txt | awk '{print $NF}')
-          echo "Signer SHA-256 fingerprint: $FP"
-          PIN=android-app/signing/expected-signer.txt
-          if [ -f "$PIN" ]; then
-            grep -qi "$FP" "$PIN" \
-              || { echo "::error::Signer fingerprint CHANGED! expected $(cat "$PIN"), got $FP — updates would break"; exit 1; }
-            echo "Signer fingerprint matches the pinned value ✅"
-          else
-            echo "$FP" > "$PIN"
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add "$PIN"
-            git commit -m "chore: pin Behine signer fingerprint [skip ci]"
-            git push
-          fi
-
+        run: bash android-app/ci/build.sh
       - uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: behine-release-apk
           path: android-app/app/build/outputs/apk/release/app-release.apk
