@@ -479,6 +479,9 @@ install.sh                 اینستالر یک‌خطی Docker روی VPS: ن�
 | `POST` | `/api/media/probe` | تست پخش لینک + گزارش کامل |
 | `GET` | `/api/media/proxy?url=` | پخش ویدیو از طریق سرور (با پشتیبانی Range) |
 | `GET` | `/api/rooms/:id` | اطلاعات اتاق |
+| `GET` | `/api/rooms` | فهرست اتاق‌های عمومی (رجیستری) — `?limit=N&offset=M&q=text` |
+| `GET` | `/api/rooms/:id/card` | کارت اتاق (متادیتای عمومی، بدون socket ID) |
+| `GET` | `/api/registry/stats` | آمار رجیستری (شامل تعداد اتاق‌های عمومی) |
 | `GET` | `/api/stats` | آمار زنده |
 | `GET` | `/healthz` | health check |
 | `GET` | `/ping` | بیکن سبک و CORS-باز برای تست دسترس‌پذیری دامنه |

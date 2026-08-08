@@ -32,6 +32,15 @@ import {
   stats,
   updateCallPeer,
 } from './rooms.js';
+import {
+  publishRoom,
+  unpublishRoom,
+  isPublished,
+  listPublicRooms,
+  cleanupRoom,
+  registryStats,
+} from './rooms-registry.js';
+import { buildCard } from './room-card.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -194,6 +203,44 @@ app.get('/api/rooms/:id', (req, res) => {
   const room = getRoom(id);
   if (!room) return res.status(404).json({ error: 'room_not_found' });
   return res.json({ id: room.id, members: room.members.size, source: room.source });
+});
+
+/* ---------------------------------------------------------------- */
+/* Rooms registry — public room discovery                             */
+/* ---------------------------------------------------------------- */
+
+/**
+ * List publicly-published rooms.  Supports ?limit=N&offset=M&q=text.
+ * Returns room cards (no socket IDs, no internal state).
+ */
+app.get('/api/rooms', (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+  const query = String(req.query.q || '').slice(0, 100);
+  const cards = listPublicRooms({ limit, offset, query });
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ rooms: cards, total: cards.length });
+});
+
+/**
+ * Get a room card (public metadata) for a specific room.
+ * Works for both published and unpublished rooms — the card itself
+ * contains only safe data (no socket IDs).
+ */
+app.get('/api/rooms/:id/card', (req, res) => {
+  const id = normalizeRoomId(req.params.id);
+  const room = getRoom(id);
+  if (!room) return res.status(404).json({ error: 'room_not_found' });
+  const card = buildCard(room);
+  return res.json({ ...card, public: isPublished(id) });
+});
+
+/**
+ * Extended health/stats that include registry data.
+ */
+app.get('/api/registry/stats', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(registryStats());
 });
 
 /* ---------------------------------------------------------------- */
@@ -482,6 +529,24 @@ io.on('connection', (socket) => {
     };
   }));
 
+  /* ---------------------------------------------------------------- */
+  /* Rooms registry — publish / unpublish                                */
+  /* ---------------------------------------------------------------- */
+
+  socket.on('registry:publish', (_payload, ack) => {
+    if (!joinedRoom) return ack?.({ error: 'not_in_room' });
+    const ok = publishRoom(joinedRoom, socket.id);
+    if (ok) io.emit('registry:update', { rooms: listPublicRooms() });
+    return ack?.({ ok });
+  });
+
+  socket.on('registry:unpublish', (_payload, ack) => {
+    if (!joinedRoom) return ack?.({ error: 'not_in_room' });
+    const ok = unpublishRoom(joinedRoom, socket.id);
+    if (ok) io.emit('registry:update', { rooms: listPublicRooms() });
+    return ack?.({ ok });
+  });
+
   socket.on('room:transfer-host', (payload = {}) => {
     const room = joinedRoom && getRoom(joinedRoom);
     if (!room || room.hostId !== socket.id) return;
@@ -525,6 +590,7 @@ io.on('connection', (socket) => {
     }
 
     removeRoomIfEmpty(joinedRoom);
+    cleanupRoom(joinedRoom);
   });
 });
 

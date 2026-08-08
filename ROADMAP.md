@@ -64,7 +64,11 @@
 
 ## 🔜 فاز ۴ — پیش‌نمایش و اسکرین‌شات و تاریخچه
 
-- پیش‌نمایش اتاق: thumbnail ویدیو + تعداد اعضا قبل از ورود
+- [x] پیش‌نمایش اتاق: room-card با id, members, source, createdAt (بدون نشون دادن socket ID)
+- [x] رجیستری اتاق‌ها: فهرست عمومی اتاق‌ها (opt-in) با pagination و search
+- [x] REST: `GET /api/rooms`, `GET /api/rooms/:id/card`, `GET /api/registry/stats`
+- [x] Socket.IO: `registry:publish`, `registry:unpublish`, `registry:update`
+- [x] تست: ۲۵ تست جدید برای rooms-registry و room-card
 - اسکرین‌شات از پلیر → `canvas.drawImage(video)` → ذخیره و اشتراک‌گذاری
 - تاریخچه اتاق‌ها: لاگ ورود/خروج، تغییر منبع، seek events (ephemeral)
 - iframe embed: `<iframe src="/embed/:id">` برای وبلاگ‌ها و سایت‌ها

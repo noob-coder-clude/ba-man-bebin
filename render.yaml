@@ -26,3 +26,6 @@ services:
         sync: false
       - key: DOMAIN_HINTS
         sync: false
+      # Rooms-registry: how many public rooms to show per page (default 50).
+      - key: REGISTRY_PAGE_SIZE
+        value: "50"
