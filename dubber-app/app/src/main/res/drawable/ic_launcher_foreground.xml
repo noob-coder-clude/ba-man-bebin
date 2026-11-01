@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Ruby Cinema Play Badge -->
+    <path
+        android:fillColor="#E11D48"
+        android:pathData="M26,34C26,29.58 29.58,26 34,26H74C78.42,26 82,29.58 82,34V74C82,78.42 78.42,82 74,82H34C29.58,82 26,78.42 26,74V34Z" />
+    <!-- Play Triangle + Soundwave Bars -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M41,40L60,54L41,68Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M65,45h4v18h-4zM72,39h4v30h-4z" />
+</vector>

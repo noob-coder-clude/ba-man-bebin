@@ -1,0 +1,104 @@
+# ============================================================================
+# دوبلور ابری فارسی — BaMan Cloud Persian Dubber (APK Builder + Cloud Server)
+# ============================================================================
+name: farsi-dubber
+
+on:
+  push:
+    branches: ['arena/**', 'main']
+    paths:
+      - 'dubber-app/**'
+      - 'dubber-ci/**'
+      - 'dubber-jobs/current-job.json'
+      - '.github/workflows/farsi-dubber.yml'
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: 'Unique Dub Job ID'
+        required: true
+        type: string
+      youtube_url:
+        description: 'YouTube Video URL'
+        required: true
+        type: string
+      voice_name:
+        description: 'Gemini Voice Name (auto, Orus, Puck, Charon, Aoede, Kore)'
+        required: false
+        default: 'auto'
+        type: string
+      video_quality:
+        description: 'Max Video Height (360, 480, 720, 1080)'
+        required: false
+        default: '720'
+        type: string
+      style_mode:
+        description: 'Translation Tone (conversational, formal, energetic)'
+        required: false
+        default: 'conversational'
+        type: string
+      bg_volume:
+        description: 'Background Volume Percent (0 = pure Persian voice)'
+        required: false
+        default: '0'
+        type: string
+      burn_subs:
+        description: 'Burn Subtitles Into Video (true/false)'
+        required: false
+        default: 'false'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    if: >-
+      github.event_name == 'push' &&
+      !contains(github.event.head_commit.message, '[dub-job]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Build, test & verify signed APK
+        env:
+          CI_VERSION_CODE: ${{ github.run_number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash dubber-ci/build-apk.sh
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: baman-dubber-apk
+          path: dubber-app/app/build/outputs/apk/release/baman-dubber.apk
+          retention-days: 30
+
+  dub-video:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[dub-job]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: ۱. دریافت سورس سرور دوبله
+        uses: actions/checkout@v4
+      - name: ۲. نصب موتور صوتی و ابزارهای پردازش ویدیو
+        run: bash dubber-ci/setup-dub-env.sh
+      - name: ۳. دانلود از یوتیوب، ترجمه و دوبله فارسی با Gemini و انتشار
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_COOKIES_GZ_B64: ${{ secrets.YT_COOKIES_GZ_B64 }}
+          DUB_JOB_ID: ${{ inputs.job_id }}
+          DUB_YOUTUBE_URL: ${{ inputs.youtube_url }}
+          DUB_VOICE_NAME: ${{ inputs.voice_name }}
+          DUB_VIDEO_QUALITY: ${{ inputs.video_quality }}
+          DUB_STYLE_MODE: ${{ inputs.style_mode }}
+          DUB_BG_VOLUME: ${{ inputs.bg_volume }}
+          DUB_BURN_SUBS: ${{ inputs.burn_subs }}
+        run: "${RUNNER_TEMP:-/tmp}/dubber-venv/bin/python" dubber-server/dub_pipeline.py

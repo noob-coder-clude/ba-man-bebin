@@ -1,0 +1,107 @@
+plugins {
+  id 'com.android.application'
+  id 'org.jetbrains.kotlin.android'
+}
+
+// ===========================================================================
+// Play-Protect-safe stable release signing (full v1 + v2 + v3 scheme chain)
+// ===========================================================================
+def ksProps = new Properties()
+def ksPropsFile = rootProject.file('keystore.properties')
+if (ksPropsFile.exists()) ksPropsFile.withInputStream { ksProps.load(it) }
+
+def signingValue = { String prop, String env ->
+  def v = ksProps.getProperty(prop) ?: System.getenv(env)
+  (v != null && !v.trim().isEmpty()) ? v.trim() : null
+}
+def storePathVal = signingValue('storeFile', 'KEYSTORE_PATH')
+def storePassVal = signingValue('storePassword', 'KEYSTORE_PASSWORD')
+def keyAliasVal  = signingValue('keyAlias',  'KEY_ALIAS')
+def keyPassVal   = signingValue('keyPassword', 'KEY_PASSWORD')
+
+def detectType = { File f ->
+  def n = f.name.toLowerCase()
+  (n.endsWith('.p12') || n.endsWith('.pfx')) ? 'PKCS12' : 'JKS'
+}
+
+def hasOwnKeystore = storePathVal != null && rootProject.file(storePathVal).exists()
+def ciB64 = rootProject.file('signing/dubber-ci.keystore.b64')
+def useCiKeystore = !hasOwnKeystore && ciB64.exists()
+def ciKeystoreFile = rootProject.file('build/dubber-ci.p12')
+if (useCiKeystore) {
+  ciKeystoreFile.parentFile.mkdirs()
+  ciKeystoreFile.bytes = ciB64.text.trim().decodeBase64()
+}
+def signingReady = hasOwnKeystore || useCiKeystore
+
+def envVersionCode = System.getenv('CI_VERSION_CODE')
+def appVersionCode = (envVersionCode != null && envVersionCode.trim().isInteger()) ? envVersionCode.trim().toInteger() : 1
+
+android {
+  namespace 'com.bamanbebin.dubber'
+  compileSdk 34
+
+  defaultConfig {
+    applicationId 'com.bamanbebin.dubber'
+    minSdk 26
+    targetSdk 34
+    versionCode = appVersionCode
+    versionName '1.0.0'
+  }
+
+  signingConfigs {
+    release {
+      if (hasOwnKeystore) {
+        def f = rootProject.file(storePathVal)
+        storeFile = f
+        storeType = detectType(f)
+        storePassword = storePassVal
+        keyAlias = keyAliasVal
+        keyPassword = keyPassVal
+      } else if (useCiKeystore) {
+        storeFile = ciKeystoreFile
+        storeType = 'PKCS12'
+        storePassword = 'dubber-ci-keystore'
+        keyAlias = 'dubber-ci'
+        keyPassword = 'dubber-ci-keystore'
+      }
+      enableV1Signing = true
+      enableV2Signing = true
+      enableV3Signing = true
+    }
+  }
+
+  buildTypes {
+    debug {
+      applicationIdSuffix '.debug'
+    }
+    release {
+      minifyEnabled false
+      signingConfig = signingReady ? signingConfigs.release : null
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  kotlinOptions {
+    jvmTarget = '17'
+  }
+}
+
+dependencies {
+  testImplementation 'junit:junit:4.13.2'
+}
+
+if (!signingReady) {
+  tasks.configureEach { t ->
+    if ((t.name.startsWith('assemble') || t.name.startsWith('package') || t.name.startsWith('bundle'))
+        && t.name.contains('Release')) {
+      t.doFirst {
+        throw new GradleException(
+          'No stable release keystore found. Generate signing/dubber-ci.keystore.b64 first.')
+      }
+    }
+  }
+}
