@@ -136,17 +136,13 @@ jobs:
           retention-days: 30
 
   dub-video:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, '[dub-job]'))
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[dub-job]')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      - name: ۱. دریافت سورس سرور دوبله
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: ۲. نصب موتور صوتی و ابزارهای پردازش ویدیو
-        run: bash dubber-ci/setup-dub-env.sh
-      - name: ۳. دانلود از یوتیوب، ترجمه و دوبله فارسی با Gemini و انتشار
+      - name: Run Cloud Persian Dubbing Pipeline
         env:
           GH_TOKEN: ${'$'}{{ secrets.GITHUB_TOKEN }}
           GEMINI_API_KEY: ${'$'}{{ secrets.GEMINI_API_KEY }}
@@ -158,7 +154,7 @@ jobs:
           DUB_STYLE_MODE: ${'$'}{{ inputs.style_mode }}
           DUB_BG_VOLUME: ${'$'}{{ inputs.bg_volume }}
           DUB_BURN_SUBS: ${'$'}{{ inputs.burn_subs }}
-        run: "${'$'}{RUNNER_TEMP:-/tmp}/dubber-venv/bin/python" dubber-server/dub_pipeline.py
+        run: bash dubber-ci/run-dub.sh
 """.trimIndent() + "\n"
     }
 

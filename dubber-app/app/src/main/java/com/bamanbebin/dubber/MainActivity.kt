@@ -832,7 +832,12 @@ class MainActivity : Activity() {
                 st.status == "in_progress" -> "🔄"
                 else -> "⏺"
             }
-            "$icon ${st.name}"
+            val displayTitle = when (st.name) {
+                "Checkout repository" -> "۱. آماده‌سازی سرور ابری گیت‌هاب"
+                "Run Cloud Persian Dubbing Pipeline" -> "۲. دانلود از یوتیوب، ترجمه و تولید صدای فارسی با Gemini و انتشار"
+                else -> st.name
+            }
+            "$icon $displayTitle"
         }
 
         when {
